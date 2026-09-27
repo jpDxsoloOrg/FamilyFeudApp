@@ -95,6 +95,31 @@ export interface HostGameView {
 }
 
 /**
+ * Everything the host console needs. Only ever returned after `requireHost`.
+ * `likelyDuplicate` is wired to core `isDuplicate` in Task 4.4; until then it
+ * is always false.
+ */
+export function toHostGame(game: FullGame): HostGameView {
+  const round = currentRoundOf(game);
+  return {
+    game: toPublicGame(game),
+    surveys: game.surveys,
+    fastMoneyQuestions: game.fastMoneyQuestions,
+    currentBoard: round ? round.board : [],
+    fastMoneyAnswers: game.fastMoney.responses.map((response) => ({
+      slot: response.slot,
+      questionIndex: response.questionIndex,
+      answer: response.answer,
+      skipped: response.skipped,
+      likelyDuplicate: false,
+      matchedIndex: response.matchedIndex,
+      points: response.revealed ? response.points : null,
+      revealed: response.revealed,
+    })),
+  };
+}
+
+/**
  * Event hints carried by `GameUpdate`. Named so a typo in a handler is a compile
  * error instead of a subscription filter that never matches.
  */
