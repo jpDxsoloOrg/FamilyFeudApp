@@ -21,11 +21,26 @@ export default $config({
       schema: "graphql/schema.graphql",
     });
 
+    // The API defaults to API_KEY auth but ships without a key, so nothing can
+    // call it until we make one. AppSync caps a key at 365 days and refuses a
+    // date in the past; rounding the expiry to the start of a UTC month keeps
+    // it ~a year out while only changing the plan once a month.
+    const keyExpiry = new Date();
+    const apiKey = new aws.appsync.ApiKey("ApiKey", {
+      apiId: api.id,
+      description: `familyfeud ${$app.stage}`,
+      expires: new Date(Date.UTC(keyExpiry.getUTCFullYear() + 1, keyExpiry.getUTCMonth(), 1))
+        .toISOString()
+        .replace(/\.\d{3}Z$/, "Z"),
+    });
+
     const lambdaSource = api.addDataSource({
       name: "lambda",
       lambda: {
         handler: "packages/functions/src/resolver.handler",
+        // `link` grants IAM; the handlers read the plain table name from TABLE_NAME.
         link: [table],
+        environment: { TABLE_NAME: table.name },
       },
     });
 
@@ -80,11 +95,15 @@ export default $config({
       },
       environment: {
         VITE_GRAPHQL_URL: api.url,
+        VITE_GRAPHQL_REALTIME_URL: api.nodes.api.uris["REALTIME"],
+        VITE_GRAPHQL_API_KEY: apiKey.key,
       },
     });
 
     return {
       api: api.url,
+      apiRealtime: api.nodes.api.uris["REALTIME"],
+      apiKey: apiKey.key,
       site: site.url,
     };
   },

@@ -49,6 +49,8 @@ export interface Player {
 export interface Team {
   id: string;
   name: string;
+  /** Display position (0 = first). Stable across renames and re-draws. */
+  order: number;
   score: number;
   /** How many contestants have been pulled from this team so far. */
   nextContestantCursor: number;

@@ -49,6 +49,7 @@ export interface PlayerItem extends Item {
 
 export interface TeamItem extends Item {
   name: string;
+  order: number;
   score: number;
   nextContestantCursor: number;
 }
@@ -261,6 +262,7 @@ export function toTeam(item: Item): Team {
   return {
     id: suffixAfter(item.sk, "TEAM#"),
     name: str(item, "name"),
+    order: num(item, "order"),
     score: num(item, "score"),
     nextContestantCursor: num(item, "nextContestantCursor"),
   };
@@ -342,6 +344,7 @@ export function teamItem(gameId: string, team: Team): TeamItem {
     pk: `GAME#${gameId}`,
     sk: `TEAM#${team.id}`,
     name: team.name,
+    order: team.order,
     score: team.score,
     nextContestantCursor: team.nextContestantCursor,
   };

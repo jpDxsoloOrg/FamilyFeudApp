@@ -86,7 +86,7 @@ export function assembleGame(metaItem: Item, items: Item[]): FullGame {
     players: sortPlayers(ofKind(items, prefixes.players).map(toPlayer)),
     teams: ofKind(items, prefixes.teams)
       .map(toTeam)
-      .sort((a, b) => a.name.localeCompare(b.name)),
+      .sort((a, b) => a.order - b.order),
     surveys: byNumber(ofKind(items, prefixes.surveys).map(toSurvey)),
     rounds: byNumber(ofKind(items, prefixes.rounds).map(toRound)),
     fastMoneyQuestions: byNumber(ofKind(items, prefixes.fastMoneyQuestions).map(toFastMoneyQuestion)),

@@ -34,8 +34,8 @@ export function player(id: string, overrides: Partial<Player> = {}): Player {
   return { id, displayName: id.toUpperCase(), teamId: null, order: 0, active: true, ...overrides };
 }
 
-export function team(id: string, name: string): Team {
-  return { id, name, score: 0, nextContestantCursor: 0 };
+export function team(id: string, name: string, order = Number(id.replace(/\D/g, "")) - 1): Team {
+  return { id, name, order, score: 0, nextContestantCursor: 0 };
 }
 
 /** A game in LOBBY with the join-code lookup, plus any players/teams given. */
