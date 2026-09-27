@@ -1,0 +1,326 @@
+schema {
+  query: Query
+  mutation: Mutation
+  subscription: Subscription
+}
+
+enum GameStatus {
+  LOBBY
+  TEAMS_SET
+  ROUND_ACTIVE
+  FAST_MONEY
+  FINISHED
+}
+
+enum RoundState {
+  PICK_CONTESTANTS
+  FACE_OFF_ARMED
+  FACE_OFF_ANSWERING
+  PASS_OR_PLAY
+  PLAYING
+  STEAL
+  REVEAL_REMAINING
+  ENDED
+}
+
+enum FastMoneyStage {
+  SETUP
+  P1_ANSWERING
+  P2_ANSWERING
+  REVEAL
+  DONE
+}
+
+enum PlayerMessageType {
+  YOU_ARE_UP
+  BUZZ_RESULT
+  FAST_MONEY_DUPLICATE
+  REMOVED
+}
+
+type GameConfig {
+  roundCount: Int!
+  roundMultipliers: [Int!]!
+  strikesToSteal: Int!
+  fastMoneyQuestionCount: Int!
+  fastMoneyP1Seconds: Int!
+  fastMoneyP2Seconds: Int!
+  fastMoneyTarget: Int!
+}
+
+input GameConfigInput {
+  roundCount: Int
+  roundMultipliers: [Int!]
+  strikesToSteal: Int
+  fastMoneyQuestionCount: Int
+  fastMoneyP1Seconds: Int
+  fastMoneyP2Seconds: Int
+  fastMoneyTarget: Int
+}
+
+type Player {
+  id: ID!
+  displayName: String!
+  "Null while unassigned (e.g. a late joiner awaiting manual assignment)."
+  teamId: ID
+  "Position within the team's turn order."
+  order: Int!
+  "False once removed by the host; inactive players are skipped in rotation."
+  active: Boolean!
+}
+
+type Team {
+  id: ID!
+  name: String!
+  score: Int!
+  players: [Player!]!
+}
+
+"A board slot. Text/points are null until revealed (public view)."
+type BoardAnswer {
+  index: Int!
+  text: String
+  points: Int
+  revealed: Boolean!
+}
+
+type Round {
+  number: Int!
+  multiplier: Int!
+  state: RoundState!
+  "Question text; null in the public view until buzzers are armed."
+  questionText: String
+  board: [BoardAnswer!]!
+  contestantPlayerIds: [ID!]!
+  buzzWinnerPlayerId: ID
+  faceOffWinnerTeamId: ID
+  playingTeamId: ID
+  currentGuesserPlayerId: ID
+  strikes: Int!
+  pot: Int!
+  awardedToTeamId: ID
+}
+
+type FastMoneyRow {
+  slot: Int!
+  questionIndex: Int!
+  "Null until revealed (public view)."
+  answer: String
+  points: Int
+  revealed: Boolean!
+  skipped: Boolean!
+}
+
+type FastMoney {
+  stage: FastMoneyStage!
+  teamId: ID
+  playerIds: [ID!]!
+  "Epoch millis when the running timer ends; null when no timer is running."
+  timerEndsAt: Float
+  rows: [FastMoneyRow!]!
+  total: Int!
+}
+
+type Game {
+  id: ID!
+  joinCode: String!
+  status: GameStatus!
+  config: GameConfig!
+  players: [Player!]!
+  teams: [Team!]!
+  currentRound: Round
+  fastMoney: FastMoney
+}
+
+"Full survey with answers — host only."
+type Survey {
+  number: Int!
+  text: String!
+  answers: [SurveyAnswer!]!
+  used: Boolean!
+}
+
+type SurveyAnswer {
+  text: String!
+  points: Int!
+}
+
+input SurveyAnswerInput {
+  text: String!
+  points: Int!
+}
+
+type FastMoneyQuestion {
+  number: Int!
+  text: String!
+  answers: [SurveyAnswer!]!
+}
+
+"Host view: public game plus everything hidden from players."
+type HostGame {
+  game: Game!
+  surveys: [Survey!]!
+  fastMoneyQuestions: [FastMoneyQuestion!]!
+  "Full board for the current round, all answers visible."
+  currentBoard: [BoardAnswer!]!
+  "Both players' Fast Money answers with duplicate hints."
+  fastMoneyAnswers: [HostFastMoneyRow!]!
+}
+
+type HostFastMoneyRow {
+  slot: Int!
+  questionIndex: Int!
+  answer: String
+  skipped: Boolean!
+  likelyDuplicate: Boolean!
+  matchedIndex: Int
+  points: Int
+  revealed: Boolean!
+}
+
+"What the active Fast Money player sees on their device."
+type FastMoneyView {
+  slot: Int!
+  timerEndsAt: Float
+  serverTime: Float!
+  "Remaining queue in play order (skipped questions come back around)."
+  queue: [FastMoneyPrompt!]!
+  answered: Int!
+  total: Int!
+}
+
+type FastMoneyPrompt {
+  questionIndex: Int!
+  text: String!
+}
+
+type CreateGamePayload {
+  game: Game!
+  "Secret token authorizing host-only operations. Shown once; keep it safe."
+  hostToken: String!
+}
+
+type JoinGamePayload {
+  game: Game!
+  player: Player!
+}
+
+"Coarse-grained public update fanned out to onGameUpdated subscribers."
+type GameUpdate {
+  gameId: ID!
+  "Event hint, e.g. PLAYER_JOINED, TEAMS_SET, BUZZ, ANSWER_REVEALED, STRIKE, FM_TIMER_STARTED."
+  event: String!
+  "Server clock (epoch ms) for timer skew correction."
+  serverTime: Float!
+  game: Game!
+}
+
+"Private message delivered only to the addressed player via onPlayerMessage."
+type PlayerMessage {
+  gameId: ID!
+  playerId: ID!
+  type: PlayerMessageType!
+  "Optional context, e.g. Fast Money questionIndex or 'WON'/'LOST' for BUZZ_RESULT."
+  detail: String
+  serverTime: Float!
+}
+
+type Query {
+  "Public, player-safe view. Hidden answers and Fast Money questions are stripped."
+  game(gameId: ID!): Game
+  hostGame(gameId: ID!, hostToken: String!): HostGame
+  "Only the current Fast Money player gets questions; anyone else gets an empty queue."
+  fastMoneyView(gameId: ID!, playerId: ID!): FastMoneyView
+}
+
+type Mutation {
+  # ---- Lobby & roster ----
+  createGame(config: GameConfigInput): CreateGamePayload!
+  joinGame(joinCode: String!, playerId: ID!, displayName: String!): JoinGamePayload!
+  updateConfig(gameId: ID!, hostToken: String!, config: GameConfigInput!): GameUpdate!
+  randomizeTeams(gameId: ID!, hostToken: String!): GameUpdate!
+  setTeamName(gameId: ID!, hostToken: String!, teamId: ID!, name: String!): GameUpdate!
+  "Assign (or move) a player to a team; appended to the bottom of that team's order."
+  assignPlayer(gameId: ID!, hostToken: String!, playerId: ID!, teamId: ID!): GameUpdate!
+  reorderPlayer(gameId: ID!, hostToken: String!, playerId: ID!, newOrder: Int!): GameUpdate!
+  "Deactivate a player (left early). Skipped in rotation; can be restored."
+  removePlayer(gameId: ID!, hostToken: String!, playerId: ID!): GameUpdate!
+  restorePlayer(gameId: ID!, hostToken: String!, playerId: ID!): GameUpdate!
+
+  # ---- Authoring (host) ----
+  upsertSurvey(gameId: ID!, hostToken: String!, number: Int!, text: String!, answers: [SurveyAnswerInput!]!): Survey!
+  deleteSurvey(gameId: ID!, hostToken: String!, number: Int!): Boolean!
+  upsertFastMoneyQuestion(gameId: ID!, hostToken: String!, number: Int!, text: String!, answers: [SurveyAnswerInput!]!): FastMoneyQuestion!
+
+  # ---- Round (host) ----
+  "Begin round N with survey S. Auto-picks the next contestant from each team."
+  startRound(gameId: ID!, hostToken: String!, surveyNumber: Int!): GameUpdate!
+  "Advance a team's contestant slot past the currently picked player (they left / not ready)."
+  skipContestant(gameId: ID!, hostToken: String!, teamId: ID!): GameUpdate!
+  "Show the question and enable the two contestants' buzzers."
+  armBuzzers(gameId: ID!, hostToken: String!): GameUpdate!
+  resetBuzzers(gameId: ID!, hostToken: String!): GameUpdate!
+  revealAnswer(gameId: ID!, hostToken: String!, index: Int!): GameUpdate!
+  strike(gameId: ID!, hostToken: String!): GameUpdate!
+  setFaceOffWinner(gameId: ID!, hostToken: String!, teamId: ID!): GameUpdate!
+  "playingTeamId is the team that will play the board (the winner, or the other team on pass)."
+  choosePassOrPlay(gameId: ID!, hostToken: String!, playingTeamId: ID!): GameUpdate!
+  "Advance the current guesser without a strike (player left / not present)."
+  skipGuesser(gameId: ID!, hostToken: String!): GameUpdate!
+  endRound(gameId: ID!, hostToken: String!): GameUpdate!
+
+  # ---- Round (player) ----
+  "First conditional write wins. Losers receive the current state, not an error."
+  buzz(gameId: ID!, playerId: ID!): GameUpdate!
+
+  # ---- Fast Money ----
+  selectFastMoneyPlayers(gameId: ID!, hostToken: String!, teamId: ID!, playerIds: [ID!]!): GameUpdate!
+  "Starts the timer for slot 1 or 2 using the configured seconds."
+  startFastMoneyTurn(gameId: ID!, hostToken: String!, slot: Int!): GameUpdate!
+  endFastMoneyTurn(gameId: ID!, hostToken: String!): GameUpdate!
+  submitFastMoneyAnswer(gameId: ID!, playerId: ID!, questionIndex: Int!, answer: String!): FastMoneyView!
+  skipFastMoneyQuestion(gameId: ID!, playerId: ID!, questionIndex: Int!): FastMoneyView!
+  "Host flags player 2's answer as a duplicate of player 1's; the player must re-answer."
+  buzzDuplicate(gameId: ID!, hostToken: String!, questionIndex: Int!): PlayerMessage!
+  "matchedIndex null = not on the board (0 points)."
+  revealFastMoneyAnswer(gameId: ID!, hostToken: String!, slot: Int!, questionIndex: Int!, matchedIndex: Int): GameUpdate!
+  finishGame(gameId: ID!, hostToken: String!): GameUpdate!
+
+  "Internal: used by the server to publish private messages (YOU_ARE_UP etc.)."
+  sendPlayerMessage(gameId: ID!, hostToken: String!, playerId: ID!, type: PlayerMessageType!, detail: String): PlayerMessage!
+}
+
+type Subscription {
+  onGameUpdated(gameId: ID!): GameUpdate
+    @aws_subscribe(
+      mutations: [
+        "updateConfig"
+        "randomizeTeams"
+        "setTeamName"
+        "assignPlayer"
+        "reorderPlayer"
+        "removePlayer"
+        "restorePlayer"
+        "startRound"
+        "skipContestant"
+        "armBuzzers"
+        "resetBuzzers"
+        "revealAnswer"
+        "strike"
+        "setFaceOffWinner"
+        "choosePassOrPlay"
+        "skipGuesser"
+        "endRound"
+        "buzz"
+        "selectFastMoneyPlayers"
+        "startFastMoneyTurn"
+        "endFastMoneyTurn"
+        "revealFastMoneyAnswer"
+        "finishGame"
+      ]
+    )
+
+  "Private channel: AppSync only delivers payloads whose gameId AND playerId match."
+  onPlayerMessage(gameId: ID!, playerId: ID!): PlayerMessage
+    @aws_subscribe(mutations: ["buzzDuplicate", "sendPlayerMessage"])
+}
