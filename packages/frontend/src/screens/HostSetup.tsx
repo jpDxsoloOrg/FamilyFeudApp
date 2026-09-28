@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { CopyButton } from "../components/CopyButton";
 import { HostTokenGate } from "../components/HostTokenGate";
 import { QuestionEditor, type QuestionDraft } from "../components/QuestionEditor";
+import { QuestionBankTools } from "../components/QuestionBankTools";
 import { RealtimeBadge } from "../components/RealtimeBadge";
 import { useHostGame } from "../hooks/useHostGame";
 import { deleteSurvey, toApiError, updateConfig, upsertFastMoneyQuestion, upsertSurvey } from "../lib/api";
@@ -335,6 +336,25 @@ export function HostSetup() {
         config={game.config}
         locked={locked}
         onSave={async (config) => applyUpdate(await updateConfig(gameId, hostToken, config))}
+      />
+
+      <QuestionBankTools
+        surveys={surveys}
+        fastMoneyQuestions={fastMoneyQuestions}
+        busy={locked}
+        onImport={async (bank) => {
+          let nextSurvey = surveys.reduce((max, s) => Math.max(max, s.number), 0) + 1;
+          let nextFm = fastMoneyQuestions.reduce((max, q) => Math.max(max, q.number), 0) + 1;
+          const addedSurveys: Survey[] = [];
+          const addedFm: FastMoneyQuestion[] = [];
+          for (const q of bank.surveys) addedSurveys.push(await upsertSurvey(gameId, hostToken, nextSurvey++, q.text, q.answers));
+          for (const q of bank.fastMoney) addedFm.push(await upsertFastMoneyQuestion(gameId, hostToken, nextFm++, q.text, q.answers));
+          patchHost((current) => ({
+            ...current,
+            surveys: [...current.surveys, ...addedSurveys].sort((a, b) => a.number - b.number),
+            fastMoneyQuestions: [...current.fastMoneyQuestions, ...addedFm].sort((a, b) => a.number - b.number),
+          }));
+        }}
       />
 
       <QuestionList<Survey>
