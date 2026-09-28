@@ -119,6 +119,7 @@ export function Host() {
           game={game}
           surveys={host?.surveys ?? []}
           fullBoard={[]}
+          fullQuestion={null}
           busy={busy}
           lastEventKey={null}
           lastEventName={undefined}
@@ -156,6 +157,7 @@ export function Host() {
           game={game}
           surveys={host?.surveys ?? []}
           fullBoard={host?.currentBoard ?? []}
+          fullQuestion={host?.currentQuestion ?? null}
           busy={busy}
           lastEventKey={lastEvent?.serverTime ?? null}
           lastEventName={lastEvent?.event}

@@ -138,6 +138,7 @@ export async function fetchHostGame(gameId: string, hostToken: string): Promise<
         surveys { ${SURVEY_FIELDS} }
         fastMoneyQuestions { ${FM_QUESTION_FIELDS} }
         currentBoard { index text points revealed }
+        currentQuestion
         fastMoneyAnswers { slot questionIndex answer skipped likelyDuplicate matchedIndex points revealed }
       }
     }`,

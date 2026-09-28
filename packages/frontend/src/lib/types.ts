@@ -70,6 +70,7 @@ export interface ApiHostGame {
   surveys: Survey[];
   fastMoneyQuestions: FastMoneyQuestion[];
   currentBoard: BoardAnswer[];
+  currentQuestion: string | null;
   fastMoneyAnswers: ApiHostFastMoneyRow[];
 }
 

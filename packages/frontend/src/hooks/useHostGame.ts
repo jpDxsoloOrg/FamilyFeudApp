@@ -24,7 +24,7 @@ export interface UseHostGameResult extends UseGameResult {
   refreshHost: () => void;
 }
 
-const EMPTY_HOST: HostData = { surveys: [], fastMoneyQuestions: [], currentBoard: [], fastMoneyAnswers: [] };
+const EMPTY_HOST: HostData = { surveys: [], fastMoneyQuestions: [], currentBoard: [], currentQuestion: null, fastMoneyAnswers: [] };
 
 export function useHostGame(gameId: string | undefined): UseHostGameResult {
   const hostToken = useMemo(() => (gameId ? getHostToken(gameId) : null), [gameId]);

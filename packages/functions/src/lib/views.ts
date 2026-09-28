@@ -91,6 +91,7 @@ export interface HostGameView {
   surveys: Survey[];
   fastMoneyQuestions: FastMoneyQuestion[];
   currentBoard: BoardAnswer[];
+  currentQuestion: string | null;
   fastMoneyAnswers: HostFastMoneyRow[];
 }
 
@@ -106,6 +107,7 @@ export function toHostGame(game: FullGame): HostGameView {
     surveys: game.surveys,
     fastMoneyQuestions: game.fastMoneyQuestions,
     currentBoard: round ? round.board : [],
+    currentQuestion: round ? round.questionText : null,
     fastMoneyAnswers: game.fastMoney.responses.map((response) => ({
       slot: response.slot,
       questionIndex: response.questionIndex,

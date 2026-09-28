@@ -63,6 +63,8 @@ describe("startRound", () => {
     expect(table.get(`GAME#${GAME_ID}`, "TEAM#t1")?.nextContestantCursor).toBe(1);
     const view = await hostGame(host);
     expect(view.currentBoard.map((s) => s.text)).toEqual(["Dog", "Cat"]);
+    // The host reads the question aloud, so it is visible before buzzers are armed.
+    expect(view.currentQuestion).toBe("Name a pet");
   });
 
   it("uses the configured multiplier and rotates contestants across rounds", async () => {

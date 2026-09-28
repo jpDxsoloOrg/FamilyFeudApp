@@ -27,6 +27,8 @@ interface Props {
   surveys: Survey[];
   /** Full board for the current round (host only); empty until loaded. */
   fullBoard: BoardAnswer[];
+  /** The question from the host view, available before buzzers are armed. */
+  fullQuestion: string | null;
   busy: boolean;
   lastEventKey: number | null;
   lastEventName: string | undefined;
@@ -88,7 +90,7 @@ function StartRoundPanel({ gameId, game, surveys, busy, onStart }: { gameId: str
   );
 }
 
-export function HostRound({ gameId, game, surveys, fullBoard, busy, lastEventKey, lastEventName, justRevealed, actions }: Props) {
+export function HostRound({ gameId, game, surveys, fullBoard, fullQuestion, busy, lastEventKey, lastEventName, justRevealed, actions }: Props) {
   const round = game.currentRound;
   const inPlay = round && round.state !== "ENDED";
 
@@ -137,9 +139,15 @@ export function HostRound({ gameId, game, surveys, fullBoard, busy, lastEventKey
       </p>
       <Scoreboard teams={game.teams} pot={round.pot} multiplier={round.multiplier} activeTeamId={controlTeamId} compact />
 
-      <p className={`question${round.questionText ? "" : " question--hidden"}`}>
-        {round.questionText ?? "Question is hidden from players until you arm the buzzers."}
-      </p>
+      {(() => {
+        const question = round.questionText ?? fullQuestion;
+        return (
+          <>
+            <p className="question">{question ?? "Loading question…"}</p>
+            {!round.questionText && <p className="muted small" style={{ textAlign: "center" }}>Players and the display see the question once you arm the buzzers.</p>}
+          </>
+        );
+      })()}
 
       {(state === "PICK_CONTESTANTS" || state === "FACE_OFF_ARMED" || state === "FACE_OFF_ANSWERING") && (
         <Podium
