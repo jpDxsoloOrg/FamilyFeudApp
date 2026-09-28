@@ -9,6 +9,8 @@ export default $config({
       name: "familyfeud",
       removal: input?.stage === "production" ? "retain" : "remove",
       home: "aws",
+      // `random` mints the Lambda's internal secret (see below); run `npx sst install` after changing this.
+      providers: { random: "4.16.6" },
     };
   },
   async run() {
