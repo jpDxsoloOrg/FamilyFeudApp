@@ -1,9 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ConflictError, ValidationError } from "../lib/errors.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ConflictError, ForbiddenError, ValidationError } from "../lib/errors.js";
 import { keys } from "../lib/keys.js";
 import { installFakeDynamo, type FakeTable } from "../testSupport/fakeDynamo.js";
 import { GAME_ID, HOST_TOKEN, player, seedGame, team } from "../testSupport/fixtures.js";
-import { endFastMoneyTurn, selectFastMoneyPlayers, startFastMoneyTurn } from "./fastMoney.js";
+import {
+  endFastMoneyTurn,
+  fastMoneyView,
+  selectFastMoneyPlayers,
+  skipFastMoneyQuestion,
+  startFastMoneyTurn,
+  submitFastMoneyAnswer,
+} from "./fastMoney.js";
 
 let table: FakeTable;
 const host = { gameId: GAME_ID, hostToken: HOST_TOKEN };
@@ -31,6 +38,10 @@ export function seedFastMoney(t: FakeTable, questionCount = 3, authored = questi
 beforeEach(() => {
   table = installFakeDynamo();
   seedFastMoney(table);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe("selectFastMoneyPlayers", () => {
@@ -85,7 +96,6 @@ describe("startFastMoneyTurn / endFastMoneyTurn", () => {
 
     update = await endFastMoneyTurn(host);
     expect(update.game.fastMoney).toMatchObject({ stage: "REVEAL", timerEndsAt: null });
-    vi.restoreAllMocks();
   });
 
   it("enforces the order and refuses double starts or ending when nothing runs", async () => {
@@ -101,5 +111,57 @@ describe("startFastMoneyTurn / endFastMoneyTurn", () => {
     table.reset();
     seedFastMoney(table);
     await expect(startFastMoneyTurn({ ...host, slot: 1 })).rejects.toThrow(/Select the two/);
+  });
+});
+
+describe("fastMoneyView / submit / skip", () => {
+  beforeEach(async () => {
+    await selectFastMoneyPlayers({ ...host, teamId: "t1", playerIds: ["a1", "a2"] });
+    vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+  });
+
+  it("only the active player receives a queue", async () => {
+    let view = await fastMoneyView({ gameId: GAME_ID, playerId: "a1" });
+    expect(view).toMatchObject({ slot: 1, timerEndsAt: null, queue: [], answered: 0, total: 3 });
+
+    await startFastMoneyTurn({ ...host, slot: 1 });
+    view = await fastMoneyView({ gameId: GAME_ID, playerId: "a1" });
+    expect(view?.queue).toEqual([
+      { questionIndex: 0, text: "FM1" },
+      { questionIndex: 1, text: "FM2" },
+      { questionIndex: 2, text: "FM3" },
+    ]);
+    expect(view?.timerEndsAt).toBe(1_020_000);
+    expect(view?.serverTime).toBe(1_000_000);
+
+    const other = await fastMoneyView({ gameId: GAME_ID, playerId: "a2" });
+    expect(other).toMatchObject({ slot: 2, queue: [], timerEndsAt: null });
+    const spectator = await fastMoneyView({ gameId: GAME_ID, playerId: "b1" });
+    expect(spectator).toMatchObject({ slot: 0, queue: [] });
+    await expect(fastMoneyView({ gameId: "nope", playerId: "a1" })).resolves.toBeNull();
+  });
+
+  it("submit and skip update the sheet and the queue", async () => {
+    await startFastMoneyTurn({ ...host, slot: 1 });
+    let view = await skipFastMoneyQuestion({ gameId: GAME_ID, playerId: "a1", questionIndex: 0 });
+    expect(view.queue.map((q) => q.questionIndex)).toEqual([1, 2, 0]);
+    view = await submitFastMoneyAnswer({ gameId: GAME_ID, playerId: "a1", questionIndex: 1, answer: " Apple " });
+    expect(view.queue.map((q) => q.questionIndex)).toEqual([2, 0]);
+    expect(view.answered).toBe(1);
+    expect(table.get(`GAME#${GAME_ID}`, "FMRESP#1#001")).toMatchObject({ answer: "Apple", skipped: false });
+    expect(table.get(`GAME#${GAME_ID}`, "FMRESP#1#000")).toMatchObject({ answer: null, skipped: true, skippedSeq: 1 });
+    await expect(submitFastMoneyAnswer({ gameId: GAME_ID, playerId: "a1", questionIndex: 1, answer: "again" })).rejects.toThrow(ConflictError);
+  });
+
+  it("refuses the wrong player, the wrong turn, and late submissions", async () => {
+    await expect(submitFastMoneyAnswer({ gameId: GAME_ID, playerId: "a1", questionIndex: 0, answer: "x" })).rejects.toThrow(/not your turn/);
+    await startFastMoneyTurn({ ...host, slot: 1 });
+    await expect(submitFastMoneyAnswer({ gameId: GAME_ID, playerId: "a2", questionIndex: 0, answer: "x" })).rejects.toThrow(/not your turn/);
+    await expect(submitFastMoneyAnswer({ gameId: GAME_ID, playerId: "b1", questionIndex: 0, answer: "x" })).rejects.toThrow(ForbiddenError);
+    vi.spyOn(Date, "now").mockReturnValue(1_021_400); // inside the 1.5 s grace
+    await expect(submitFastMoneyAnswer({ gameId: GAME_ID, playerId: "a1", questionIndex: 0, answer: "x" })).resolves.toBeDefined();
+    vi.spyOn(Date, "now").mockReturnValue(1_021_600);
+    await expect(submitFastMoneyAnswer({ gameId: GAME_ID, playerId: "a1", questionIndex: 1, answer: "y" })).rejects.toThrow(/Time is up/);
+    await expect(skipFastMoneyQuestion({ gameId: GAME_ID, playerId: "a1", questionIndex: 1 })).rejects.toThrow(/Time is up/);
   });
 });

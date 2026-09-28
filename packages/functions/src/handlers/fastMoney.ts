@@ -1,10 +1,19 @@
 // Tasks 4.2–4.5 — Fast Money. Thin persistence wrappers around core/fastMoney.
-import { emptyResponses, type FastMoneySlot, type FastMoneyStage } from "@familyfeud/core";
+import {
+  answerQuestion,
+  buildQueue,
+  emptyResponses,
+  isWithinDeadline,
+  skipQuestion,
+  type FastMoneyResponse,
+  type FastMoneySlot,
+  type FastMoneyStage,
+} from "@familyfeud/core";
 import { requiredArray, requiredInt, requiredString, type Args } from "../lib/args.js";
 import { requireHost } from "../lib/auth.js";
-import { batchWrite, updateItem } from "../lib/db.js";
-import { ConflictError, NotFoundError, ValidationError } from "../lib/errors.js";
-import type { FullGame } from "../lib/gameState.js";
+import { batchWrite, putItem, updateItem } from "../lib/db.js";
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../lib/errors.js";
+import { loadGame, type FullGame } from "../lib/gameState.js";
 import { keys } from "../lib/keys.js";
 import { fastMoneyResponseItem } from "../lib/mappers.js";
 import { serverTime } from "../lib/time.js";
@@ -124,16 +133,107 @@ export async function endFastMoneyTurn(args: Args): Promise<GameUpdate> {
   return gameUpdate(withFastMoney(game, { stage: nextStage, timerEndsAt: null }), "FM_TURN_ENDED");
 }
 
-export async function fastMoneyView(_args: Args): Promise<unknown> {
-  throw new Error("Not implemented: fastMoneyView (Task 4.3)");
+/* ---------- 4.3 — the answering player's view and mutations ---------- */
+
+export const MAX_FM_ANSWER_LENGTH = 60;
+
+export interface FastMoneyPrompt {
+  questionIndex: number;
+  text: string;
 }
 
-export async function submitFastMoneyAnswer(_args: Args): Promise<unknown> {
-  throw new Error("Not implemented: submitFastMoneyAnswer (Task 4.3)");
+/** The schema's `FastMoneyView`. */
+export interface FastMoneyViewPayload {
+  slot: number;
+  timerEndsAt: number | null;
+  serverTime: number;
+  queue: FastMoneyPrompt[];
+  answered: number;
+  total: number;
 }
 
-export async function skipFastMoneyQuestion(_args: Args): Promise<unknown> {
-  throw new Error("Not implemented: skipFastMoneyQuestion (Task 4.3)");
+/** Which slot this player holds (1/2), or 0 if they are not a Fast Money player. */
+function slotOf(game: FullGame, playerId: string): FastMoneySlot | 0 {
+  const index = game.fastMoney.playerIds.indexOf(playerId);
+  return index === 0 ? 1 : index === 1 ? 2 : 0;
+}
+
+/**
+ * Only the player whose turn is running gets a queue; everyone else (the
+ * other player, spectators) gets an empty one, so questions never reach a
+ * device that should not have them.
+ */
+export function toFastMoneyView(game: FullGame, playerId: string): FastMoneyViewPayload {
+  const slot = slotOf(game, playerId);
+  const total = game.config.fastMoneyQuestionCount;
+  const active = activeSlot(game);
+  const mine = slot === 0 ? [] : game.fastMoney.responses.filter((r) => r.slot === slot);
+  const answered = mine.filter((r) => r.answer !== null).length;
+  const isActive = slot !== 0 && slot === active;
+  const questions = game.fastMoneyQuestions;
+  const queue = isActive
+    ? buildQueue(game.fastMoney.responses, slot).flatMap((questionIndex) => {
+        const question = questions[questionIndex];
+        return question ? [{ questionIndex, text: question.text }] : [];
+      })
+    : [];
+  return { slot, timerEndsAt: isActive ? game.fastMoney.timerEndsAt : null, serverTime: serverTime(), queue, answered, total };
+}
+
+export async function fastMoneyView(args: Args): Promise<FastMoneyViewPayload | null> {
+  const gameId = requiredString(args, "gameId");
+  const playerId = requiredString(args, "playerId");
+  const game = await loadGame(gameId);
+  if (!game) return null;
+  return toFastMoneyView(game, playerId);
+}
+
+/** Load, check this player is the one answering and the clock has not run out. */
+async function requireAnswering(gameId: string, playerId: string): Promise<{ game: FullGame; slot: FastMoneySlot }> {
+  const game = await loadGame(gameId);
+  if (!game) throw new NotFoundError("No such game");
+  requireFastMoney(game);
+  const slot = slotOf(game, playerId);
+  if (slot === 0) throw new ForbiddenError("You are not a Fast Money player");
+  if (activeSlot(game) !== slot) throw new ConflictError("It is not your turn");
+  if (!isWithinDeadline(serverTime(), game.fastMoney.timerEndsAt)) throw new ConflictError("Time is up");
+  return { game, slot };
+}
+
+async function persistResponse(gameId: string, game: FullGame, responses: FastMoneyResponse[], slot: FastMoneySlot, questionIndex: number, playerId: string): Promise<FastMoneyViewPayload> {
+  const changed = responses.find((r) => r.slot === slot && r.questionIndex === questionIndex);
+  if (!changed) throw new NotFoundError(`No Fast Money question ${questionIndex}`);
+  await putItem(fastMoneyResponseItem(gameId, changed));
+  return toFastMoneyView(withFastMoney(game, { responses }), playerId);
+}
+
+function applyOrConflict<T>(fn: () => T): T {
+  try {
+    return fn();
+  } catch (error) {
+    throw new ConflictError(error instanceof Error ? error.message : String(error));
+  }
+}
+
+export async function submitFastMoneyAnswer(args: Args): Promise<FastMoneyViewPayload> {
+  const gameId = requiredString(args, "gameId");
+  const playerId = requiredString(args, "playerId");
+  const questionIndex = requiredInt(args, "questionIndex", { min: 0 });
+  const answer = requiredString(args, "answer", { maxLength: MAX_FM_ANSWER_LENGTH });
+
+  const { game, slot } = await requireAnswering(gameId, playerId);
+  const responses = applyOrConflict(() => answerQuestion(game.fastMoney.responses, slot, questionIndex, answer));
+  return persistResponse(gameId, game, responses, slot, questionIndex, playerId);
+}
+
+export async function skipFastMoneyQuestion(args: Args): Promise<FastMoneyViewPayload> {
+  const gameId = requiredString(args, "gameId");
+  const playerId = requiredString(args, "playerId");
+  const questionIndex = requiredInt(args, "questionIndex", { min: 0 });
+
+  const { game, slot } = await requireAnswering(gameId, playerId);
+  const responses = applyOrConflict(() => skipQuestion(game.fastMoney.responses, slot, questionIndex));
+  return persistResponse(gameId, game, responses, slot, questionIndex, playerId);
 }
 
 export async function buzzDuplicate(_args: Args): Promise<unknown> {
