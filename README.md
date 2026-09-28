@@ -49,4 +49,8 @@ npx sst deploy         # deploy
   game, randomize two ordered teams, rename teams, slot in late joiners, reorder / remove /
   restore players, and author survey + Fast Money questions, all live over AppSync
   subscriptions. See the task list in [PLAN.md](./PLAN.md).
-- Milestone 3 (the round loop: face-offs, buzzers, board, strikes, steals) is next.
+- Milestone 3 (the round loop) is done: server-picked contestants, phone buzzers with
+  server-side arbitration, the survey board with reveals, strikes, steals and pot multipliers,
+  a private per-player channel (you're up / buzz result / removed), keyboard shortcuts on the
+  host console, and synthesised sound effects with a mute toggle.
+- Milestone 4 (Fast Money) is next.

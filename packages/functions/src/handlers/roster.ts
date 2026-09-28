@@ -11,6 +11,7 @@ import { batchWrite, MAX_TRANSACT_ITEMS, tableName, transactWrite } from "../lib
 import { ConflictError, NotFoundError } from "../lib/errors.js";
 import { sortPlayers, type FullGame } from "../lib/gameState.js";
 import { playerItem } from "../lib/mappers.js";
+import { playerMessage, publishPlayerMessage } from "../lib/messages.js";
 import { gameUpdate, type GameUpdate } from "../lib/views.js";
 
 function samePlayer(a: Player, b: Player): boolean {
@@ -82,7 +83,9 @@ export async function removePlayer(args: Args): Promise<GameUpdate> {
 
   const game = await requireHost(gameId, hostToken);
   findPlayer(game, playerId);
-  return applyRoster(game, setPlayerActive(game.players, playerId, false));
+  const update = await applyRoster(game, setPlayerActive(game.players, playerId, false));
+  await publishPlayerMessage(playerMessage(gameId, playerId, "REMOVED"));
+  return update;
 }
 
 export async function restorePlayer(args: Args): Promise<GameUpdate> {

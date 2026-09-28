@@ -9,6 +9,8 @@ export default $config({
       name: "familyfeud",
       removal: input?.stage === "production" ? "retain" : "remove",
       home: "aws",
+      // `random` mints the Lambda's internal secret (see below); run `npx sst install` after changing this.
+      providers: { random: "4.16.6" },
     };
   },
   async run() {
@@ -34,14 +36,38 @@ export default $config({
         .replace(/\.\d{3}Z$/, "Z"),
     });
 
+    // Private per-player messages (YOU_ARE_UP, BUZZ_RESULT, ...) are published by
+    // the Lambda calling its own API's `sendPlayerMessage` mutation, which is what
+    // makes AppSync fan them out. That self-call is authorised by this secret
+    // rather than a host token the Lambda does not have.
+    const internalSecret = new random.RandomPassword("InternalSecret", {
+      length: 40,
+      special: false,
+    });
+    // The Lambda cannot be given `api.url` directly (the API depends on the
+    // Lambda), so the URL + key are parked in SSM under a fixed name it reads
+    // lazily at runtime.
+    const apiParamName = `/familyfeud/${$app.stage}/api`;
+
     const lambdaSource = api.addDataSource({
       name: "lambda",
       lambda: {
         handler: "packages/functions/src/resolver.handler",
         // `link` grants IAM; the handlers read the plain table name from TABLE_NAME.
         link: [table],
-        environment: { TABLE_NAME: table.name },
+        environment: {
+          TABLE_NAME: table.name,
+          INTERNAL_SECRET: internalSecret.result,
+          API_PARAM_NAME: apiParamName,
+        },
+        permissions: [{ actions: ["ssm:GetParameter"], resources: ["*"] }],
       },
+    });
+
+    new aws.ssm.Parameter("ApiParam", {
+      name: apiParamName,
+      type: "String",
+      value: $jsonStringify({ url: api.url, key: apiKey.key }),
     });
 
     const mutations = [

@@ -116,6 +116,10 @@ export const ON_GAME_UPDATED = `subscription OnGameUpdated($gameId: ID!) {
   onGameUpdated(gameId: $gameId) { ${GAME_UPDATE_FIELDS} }
 }`;
 
+export const ON_PLAYER_MESSAGE = `subscription OnPlayerMessage($gameId: ID!, $playerId: ID!) {
+  onPlayerMessage(gameId: $gameId, playerId: $playerId) { gameId playerId type detail serverTime }
+}`;
+
 /* ---------- queries ---------- */
 
 export async function fetchGame(gameId: string): Promise<ApiGame | null> {
@@ -134,6 +138,7 @@ export async function fetchHostGame(gameId: string, hostToken: string): Promise<
         surveys { ${SURVEY_FIELDS} }
         fastMoneyQuestions { ${FM_QUESTION_FIELDS} }
         currentBoard { index text points revealed }
+        currentQuestion
         fastMoneyAnswers { slot questionIndex answer skipped likelyDuplicate matchedIndex points revealed }
       }
     }`,
@@ -221,6 +226,56 @@ export function removePlayer(gameId: string, hostToken: string, playerId: string
 
 export function restorePlayer(gameId: string, hostToken: string, playerId: string): Promise<ApiGameUpdate> {
   return hostMutation("restorePlayer", ", $playerId: ID!", ", playerId: $playerId", { gameId, hostToken, playerId });
+}
+
+/* ---------- round ---------- */
+
+export function startRound(gameId: string, hostToken: string, surveyNumber: number): Promise<ApiGameUpdate> {
+  return hostMutation("startRound", ", $surveyNumber: Int!", ", surveyNumber: $surveyNumber", { gameId, hostToken, surveyNumber });
+}
+
+export function skipContestant(gameId: string, hostToken: string, teamId: string): Promise<ApiGameUpdate> {
+  return hostMutation("skipContestant", ", $teamId: ID!", ", teamId: $teamId", { gameId, hostToken, teamId });
+}
+
+export function armBuzzers(gameId: string, hostToken: string): Promise<ApiGameUpdate> {
+  return hostMutation("armBuzzers", "", "", { gameId, hostToken });
+}
+
+export function resetBuzzers(gameId: string, hostToken: string): Promise<ApiGameUpdate> {
+  return hostMutation("resetBuzzers", "", "", { gameId, hostToken });
+}
+
+export function revealAnswer(gameId: string, hostToken: string, index: number): Promise<ApiGameUpdate> {
+  return hostMutation("revealAnswer", ", $index: Int!", ", index: $index", { gameId, hostToken, index });
+}
+
+export function strike(gameId: string, hostToken: string): Promise<ApiGameUpdate> {
+  return hostMutation("strike", "", "", { gameId, hostToken });
+}
+
+export function setFaceOffWinner(gameId: string, hostToken: string, teamId: string): Promise<ApiGameUpdate> {
+  return hostMutation("setFaceOffWinner", ", $teamId: ID!", ", teamId: $teamId", { gameId, hostToken, teamId });
+}
+
+export function choosePassOrPlay(gameId: string, hostToken: string, playingTeamId: string): Promise<ApiGameUpdate> {
+  return hostMutation("choosePassOrPlay", ", $playingTeamId: ID!", ", playingTeamId: $playingTeamId", { gameId, hostToken, playingTeamId });
+}
+
+export function skipGuesser(gameId: string, hostToken: string): Promise<ApiGameUpdate> {
+  return hostMutation("skipGuesser", "", "", { gameId, hostToken });
+}
+
+export function endRound(gameId: string, hostToken: string): Promise<ApiGameUpdate> {
+  return hostMutation("endRound", "", "", { gameId, hostToken });
+}
+
+export async function buzz(gameId: string, playerId: string): Promise<ApiGameUpdate> {
+  const data = await gql<{ buzz: ApiGameUpdate }>(
+    `mutation Buzz($gameId: ID!, $playerId: ID!) { buzz(gameId: $gameId, playerId: $playerId) { ${GAME_UPDATE_FIELDS} } }`,
+    { gameId, playerId },
+  );
+  return data.buzz;
 }
 
 /* ---------- authoring ---------- */

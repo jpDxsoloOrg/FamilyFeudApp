@@ -70,7 +70,18 @@ export interface ApiHostGame {
   surveys: Survey[];
   fastMoneyQuestions: FastMoneyQuestion[];
   currentBoard: BoardAnswer[];
+  currentQuestion: string | null;
   fastMoneyAnswers: ApiHostFastMoneyRow[];
+}
+
+export type PlayerMessageType = "YOU_ARE_UP" | "BUZZ_RESULT" | "FAST_MONEY_DUPLICATE" | "REMOVED";
+
+export interface ApiPlayerMessage {
+  gameId: string;
+  playerId: string;
+  type: PlayerMessageType;
+  detail: string | null;
+  serverTime: number;
 }
 
 export interface SurveyAnswerInput {

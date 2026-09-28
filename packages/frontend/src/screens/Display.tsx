@@ -1,7 +1,11 @@
 // Task 2.9 — big-screen lobby. Round / Fast Money boards come in 3.7 / 4.8.
 import { useParams } from "react-router-dom";
+import { DisplayRound } from "../components/DisplayRound";
+import { MuteToggle } from "../components/MuteToggle";
 import { RealtimeBadge } from "../components/RealtimeBadge";
 import { useGame } from "../hooks/useGame";
+import { useJustRevealed } from "../hooks/useJustRevealed";
+import { useSounds } from "../hooks/useSounds";
 import type { ApiGame } from "../lib/types";
 
 function LobbyDisplay({ game }: { game: ApiGame }) {
@@ -56,7 +60,9 @@ function TeamsDisplay({ game }: { game: ApiGame }) {
 
 export function Display() {
   const { gameId } = useParams<{ gameId: string }>();
-  const { game, realtime, loading, error } = useGame(gameId);
+  const { game, realtime, loading, error, lastEvent } = useGame(gameId);
+  const { muted, toggleMuted } = useSounds(lastEvent);
+  const justRevealed = useJustRevealed(game?.currentRound);
 
   if (!game) {
     return (
@@ -71,14 +77,27 @@ export function Display() {
     <main className="page">
       <header className="page__header">
         <h1>Family Feud</h1>
-        <RealtimeBadge status={realtime} />
+        <nav className="page__nav">
+          <MuteToggle muted={muted} onToggle={toggleMuted} />
+          <RealtimeBadge status={realtime} />
+        </nav>
       </header>
       {game.status === "LOBBY" && <LobbyDisplay game={game} />}
       {game.status === "TEAMS_SET" && <TeamsDisplay game={game} />}
-      {game.status !== "LOBBY" && game.status !== "TEAMS_SET" && (
+      {game.status === "ROUND_ACTIVE" && game.currentRound && (
+        <DisplayRound
+          game={game}
+          round={game.currentRound}
+          lastEventKey={lastEvent?.serverTime ?? null}
+          lastEventName={lastEvent?.event}
+          justRevealed={justRevealed}
+        />
+      )}
+      {game.status === "ROUND_ACTIVE" && !game.currentRound && <TeamsDisplay game={game} />}
+      {(game.status === "FAST_MONEY" || game.status === "FINISHED") && (
         <section className="card">
-          <h2>{game.status.replace("_", " ")}</h2>
-          <p className="muted">The board arrives in Milestone 3.</p>
+          <h2>Fast Money</h2>
+          <p className="muted">Arrives in Milestone 4.</p>
         </section>
       )}
     </main>

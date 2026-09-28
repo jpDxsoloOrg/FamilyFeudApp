@@ -120,6 +120,10 @@ Two subscriptions:
    delivery on the payload's `gameId` and `playerId`, so only that player's device receives it.
    Used for: `YOU_ARE_UP`, `BUZZ_RESULT`, `FAST_MONEY_DUPLICATE`, `REMOVED`.
 
+Private messages are published by the Lambda calling its own API's `sendPlayerMessage`
+mutation (authorised by a deploy-time `INTERNAL_SECRET`; the API URL and key are read from an
+SSM parameter because the Lambda cannot be handed its own API's URL at deploy time).
+
 Private *content* (host's full board, Fast Money questions for the active player) is fetched by
 authenticated **queries** (`hostGame(gameId, hostToken)`, `fastMoneyView(gameId, playerId)`)
 triggered by the public update's `event`, never pushed through the broadcast subscription.
@@ -214,16 +218,16 @@ code reference these task numbers in their `Not implemented` errors.
 - [x] 2.8 Host Setup screen: config form, survey editor (question + up to 8 answers with points), Fast Money question editor
 - [x] 2.9 Lobby views: Display shows join code + players arriving live; Host shows Randomize, rename teams, drag/reorder roster, assign unassigned, remove/restore
 
-### Milestone 3 — Round loop
-- [ ] 3.1 `core/round.ts`: `makeBoard`, `createRound`, `currentGuesser`, `roundReducer` for the full state table (arm → buzz → face-off reveal/strike → winner → pass/play → playing with strikes → steal → award → reveal remaining → end) + exhaustive vitest (illegal transitions throw, pot math with multipliers, three-strike steal both outcomes, all-answers-revealed awards immediately)
-- [ ] 3.2 `core/publicView.ts`: `toPublicBoard`, `toPublicRound` (question hidden until armed), `toPublicFastMoneyRows` + tests asserting no hidden text/points leak
-- [ ] 3.3 Round host mutations wired to DynamoDB: `startRound` (auto-picks contestants via cursor, marks survey used, applies `roundMultipliers[n]`), `skipContestant`, `armBuzzers`, `resetBuzzers`, `revealAnswer`, `strike`, `setFaceOffWinner`, `choosePassOrPlay`, `skipGuesser`, `endRound` (adds awarded pot to team score; after last round → `FAST_MONEY`)
-- [ ] 3.4 `buzz` mutation with conditional `UpdateItem` arbitration (first write wins, losers get current state); test against DynamoDB Local or a mocked client
-- [ ] 3.5 Private channel: `sendPlayerMessage` internal mutation invoked by the Lambda (self-call to AppSync) for `YOU_ARE_UP`, `BUZZ_RESULT`, `REMOVED`; frontend `usePlayerMessages(gameId, playerId)` hook
-- [ ] 3.6 Host console round UI: contestant podium with skip, Arm/Reset buzzers, buzz winner banner, full board with per-answer Reveal buttons, Strike button, Face-off winner picker, Pass/Play picker, current guesser + Skip, End round; keyboard shortcuts (1–8 reveal, X strike)
-- [ ] 3.7 Display round UI: shared `SurveyBoard`, `Scoreboard`, `Strikes` (big red X animation), contestant podium, current guesser highlight, pot; large-screen layout
-- [ ] 3.8 Player round UI: same board components sized for phone; full-screen `BUZZ` button for contestants when armed; "You're up!" banner; team roster with your position highlighted
-- [ ] 3.9 Sound effects (buzz, ding, strike) with a mute toggle; respect autoplay rules (unlock on first tap)
+### Milestone 3 — Round loop ✅
+- [x] 3.1 `core/round.ts`: `makeBoard`, `createRound`, `currentGuesser`, `roundReducer` for the full state table (arm → buzz → face-off reveal/strike → winner → pass/play → playing with strikes → steal → award → reveal remaining → end) + exhaustive vitest (illegal transitions throw, pot math with multipliers, three-strike steal both outcomes, all-answers-revealed awards immediately)
+- [x] 3.2 `core/publicView.ts`: `toPublicBoard`, `toPublicRound` (question hidden until armed), `toPublicFastMoneyRows` + tests asserting no hidden text/points leak
+- [x] 3.3 Round host mutations wired to DynamoDB: `startRound` (auto-picks contestants via cursor, marks survey used, applies `roundMultipliers[n]`), `skipContestant`, `armBuzzers`, `resetBuzzers`, `revealAnswer`, `strike`, `setFaceOffWinner`, `choosePassOrPlay`, `skipGuesser`, `endRound` (adds awarded pot to team score; after last round → `FAST_MONEY`)
+- [x] 3.4 `buzz` mutation with conditional `UpdateItem` arbitration (first write wins, losers get current state); test against DynamoDB Local or a mocked client
+- [x] 3.5 Private channel: `sendPlayerMessage` internal mutation invoked by the Lambda (self-call to AppSync) for `YOU_ARE_UP`, `BUZZ_RESULT`, `REMOVED`; frontend `usePlayerMessages(gameId, playerId)` hook
+- [x] 3.6 Host console round UI: contestant podium with skip, Arm/Reset buzzers, buzz winner banner, full board with per-answer Reveal buttons, Strike button, Face-off winner picker, Pass/Play picker, current guesser + Skip, End round; keyboard shortcuts (1–8 reveal, X strike)
+- [x] 3.7 Display round UI: shared `SurveyBoard`, `Scoreboard`, `Strikes` (big red X animation), contestant podium, current guesser highlight, pot; large-screen layout
+- [x] 3.8 Player round UI: same board components sized for phone; full-screen `BUZZ` button for contestants when armed; "You're up!" banner; team roster with your position highlighted
+- [x] 3.9 Sound effects (buzz, ding, strike) with a mute toggle; respect autoplay rules (unlock on first tap)
 
 ### Milestone 4 — Fast Money
 - [ ] 4.1 `core/fastMoney.ts`: `emptyResponses`, `buildQueue` (skips come back in skip order), `skipQuestion`, `answerQuestion`, `clearAnswer`, `normalizeAnswer`, `isDuplicate`, `suggestMatch`, `totalPoints`, `isWithinDeadline` + vitest
