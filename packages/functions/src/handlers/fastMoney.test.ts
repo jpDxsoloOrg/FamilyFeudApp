@@ -3,7 +3,9 @@ import { ConflictError, ForbiddenError, ValidationError } from "../lib/errors.js
 import { keys } from "../lib/keys.js";
 import { installFakeDynamo, type FakeTable } from "../testSupport/fakeDynamo.js";
 import { GAME_ID, HOST_TOKEN, player, seedGame, team } from "../testSupport/fixtures.js";
+import { hostGame } from "./queries.js";
 import {
+  buzzDuplicate,
   endFastMoneyTurn,
   fastMoneyView,
   selectFastMoneyPlayers,
@@ -163,5 +165,40 @@ describe("fastMoneyView / submit / skip", () => {
     vi.spyOn(Date, "now").mockReturnValue(1_021_600);
     await expect(submitFastMoneyAnswer({ gameId: GAME_ID, playerId: "a1", questionIndex: 1, answer: "y" })).rejects.toThrow(/Time is up/);
     await expect(skipFastMoneyQuestion({ gameId: GAME_ID, playerId: "a1", questionIndex: 1 })).rejects.toThrow(/Time is up/);
+  });
+});
+
+describe("buzzDuplicate", () => {
+  beforeEach(async () => {
+    await selectFastMoneyPlayers({ ...host, teamId: "t1", playerIds: ["a1", "a2"] });
+    vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+    await startFastMoneyTurn({ ...host, slot: 1 });
+    await submitFastMoneyAnswer({ gameId: GAME_ID, playerId: "a1", questionIndex: 0, answer: "Dogs" });
+    await endFastMoneyTurn(host);
+    await startFastMoneyTurn({ ...host, slot: 2 });
+    await submitFastMoneyAnswer({ gameId: GAME_ID, playerId: "a2", questionIndex: 0, answer: "the dog" });
+    await submitFastMoneyAnswer({ gameId: GAME_ID, playerId: "a2", questionIndex: 1, answer: "cat" });
+  });
+
+  it("the host view flags the likely duplicate", async () => {
+    const view = await hostGame(host);
+    const p2 = view.fastMoneyAnswers.filter((r) => r.slot === 2);
+    expect(p2.find((r) => r.questionIndex === 0)).toMatchObject({ answer: "the dog", likelyDuplicate: true });
+    expect(p2.find((r) => r.questionIndex === 1)).toMatchObject({ answer: "cat", likelyDuplicate: false });
+    expect(view.fastMoneyAnswers.filter((r) => r.slot === 1).every((r) => !r.likelyDuplicate)).toBe(true);
+  });
+
+  it("clears player 2's answer, reopens the question and returns the private message", async () => {
+    const message = await buzzDuplicate({ ...host, questionIndex: 0 });
+    expect(message).toMatchObject({ gameId: GAME_ID, playerId: "a2", type: "FAST_MONEY_DUPLICATE", detail: "0" });
+    expect(table.get(`GAME#${GAME_ID}`, "FMRESP#2#000")).toMatchObject({ answer: null, skipped: false });
+    const view = await fastMoneyView({ gameId: GAME_ID, playerId: "a2" });
+    expect(view?.queue.map((q) => q.questionIndex)).toEqual([0, 2]);
+    await expect(buzzDuplicate({ ...host, questionIndex: 0 })).rejects.toThrow(/not answered/);
+  });
+
+  it("only during player 2's turn", async () => {
+    await endFastMoneyTurn(host);
+    await expect(buzzDuplicate({ ...host, questionIndex: 1 })).rejects.toThrow(/player 2's turn/);
   });
 });

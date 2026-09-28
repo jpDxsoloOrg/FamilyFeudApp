@@ -2,6 +2,7 @@
 import {
   answerQuestion,
   buildQueue,
+  clearAnswer,
   emptyResponses,
   isWithinDeadline,
   skipQuestion,
@@ -16,6 +17,7 @@ import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from ".
 import { loadGame, type FullGame } from "../lib/gameState.js";
 import { keys } from "../lib/keys.js";
 import { fastMoneyResponseItem } from "../lib/mappers.js";
+import { playerMessage, type PlayerMessage } from "../lib/messages.js";
 import { serverTime } from "../lib/time.js";
 import { gameUpdate, type GameUpdate } from "../lib/views.js";
 
@@ -236,8 +238,32 @@ export async function skipFastMoneyQuestion(args: Args): Promise<FastMoneyViewPa
   return persistResponse(gameId, game, responses, slot, questionIndex, playerId);
 }
 
-export async function buzzDuplicate(_args: Args): Promise<unknown> {
-  throw new Error("Not implemented: buzzDuplicate (Task 4.4)");
+/* ---------- 4.4 — duplicate buzz ---------- */
+
+/**
+ * Host flags player 2's answer as a duplicate of player 1's. The answer is
+ * cleared so the question comes straight back around, and the returned
+ * PlayerMessage is what AppSync fans out to player 2 (this mutation is in the
+ * onPlayerMessage subscribe list, so no self-call is needed).
+ */
+export async function buzzDuplicate(args: Args): Promise<PlayerMessage> {
+  const gameId = requiredString(args, "gameId");
+  const hostToken = requiredString(args, "hostToken");
+  const questionIndex = requiredInt(args, "questionIndex", { min: 0 });
+
+  const game = await requireHost(gameId, hostToken);
+  requireFastMoney(game);
+  if (game.fastMoney.stage !== "P2_ANSWERING") throw new ConflictError("Duplicates can only be buzzed during player 2's turn");
+  const playerId = game.fastMoney.playerIds[1];
+  if (!playerId) throw new ConflictError("Player 2 has not been selected");
+  const row = game.fastMoney.responses.find((r) => r.slot === 2 && r.questionIndex === questionIndex);
+  if (!row) throw new NotFoundError(`No Fast Money question ${questionIndex}`);
+  if (row.answer === null) throw new ConflictError("Player 2 has not answered that question");
+
+  const responses = clearAnswer(game.fastMoney.responses, 2, questionIndex);
+  const cleared = responses.find((r) => r.slot === 2 && r.questionIndex === questionIndex);
+  if (cleared) await putItem(fastMoneyResponseItem(gameId, cleared));
+  return playerMessage(gameId, playerId, "FAST_MONEY_DUPLICATE", String(questionIndex));
 }
 
 export async function revealFastMoneyAnswer(_args: Args): Promise<unknown> {
