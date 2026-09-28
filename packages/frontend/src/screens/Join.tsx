@@ -1,6 +1,6 @@
 // Task 2.7 — join a game with a code + name, or host a new one.
 import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ApiError, createGame, joinGame, toApiError } from "../lib/api";
 import {
   getDisplayName,
@@ -29,8 +29,10 @@ function fieldFor(error: ApiError): "joinCode" | "name" | undefined {
 
 export function Join() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const returning = getLastGame();
-  const [joinCode, setJoinCode] = useState(returning?.joinCode ?? "");
+  const scanned = params.get("code")?.trim().toUpperCase() ?? "";
+  const [joinCode, setJoinCode] = useState(scanned || (returning?.joinCode ?? ""));
   const [name, setName] = useState(getDisplayName() ?? "");
   const [error, setError] = useState<string>();
   const [errorField, setErrorField] = useState<"joinCode" | "name">();

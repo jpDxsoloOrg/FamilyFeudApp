@@ -3,11 +3,14 @@ import { Link, useParams } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { MuteToggle } from "../components/MuteToggle";
 import { PlayFastMoney } from "../components/PlayFastMoney";
+import { DisplayFastMoney } from "../components/DisplayFastMoney";
+import { DisplayRound } from "../components/DisplayRound";
 import { PlayRound } from "../components/PlayRound";
 import { RealtimeBadge } from "../components/RealtimeBadge";
 import { useGame } from "../hooks/useGame";
 import { useJustRevealed } from "../hooks/useJustRevealed";
 import { useJustRevealedFastMoney } from "../hooks/useJustRevealedFastMoney";
+import { LobbyDisplay, TeamsDisplay } from "./Display";
 import { usePlayerMessages } from "../hooks/usePlayerMessages";
 import { useSounds } from "../hooks/useSounds";
 import { buzz, joinGame, toApiError } from "../lib/api";
@@ -22,7 +25,7 @@ function PlayerLobby({ game, me }: { game: ApiGame; me: string }) {
   if (!self) {
     return (
       <p className="notice">
-        You're not in this game on this device. <Link to="/">Join with the code {game.joinCode}</Link>.
+        You're not in this game on this device. <Link to={`/?code=${game.joinCode}`}>Join with the code {game.joinCode}</Link>.
       </p>
     );
   }
@@ -126,6 +129,34 @@ export function Play() {
       <main className="page page--narrow">
         <h1>Family Feud</h1>
         <p className="muted">{loading ? "Loading…" : (error?.message ?? "That game could not be found.")}</p>
+      </main>
+    );
+  }
+
+  const isMember = game.players.some((player) => player.id === me);
+  const canRejoin = Boolean(getLastGame()?.gameId === gameId ? getLastGame()?.displayName : getDisplayName());
+
+  // Spectator: not on the roster and nothing to rejoin with. Show the same
+  // board the display shows, read-only, with a way in.
+  if (!isMember && !canRejoin) {
+    return (
+      <main className="page page--narrow">
+        <header className="page__header">
+          <h1>Family Feud</h1>
+          <nav className="page__nav">
+            <MuteToggle muted={muted} onToggle={toggleMuted} />
+            <RealtimeBadge status={realtime} />
+          </nav>
+        </header>
+        <p className="notice">
+          You're watching. {game.status !== "FINISHED" && <Link to={`/?code=${game.joinCode}`}>Join with code {game.joinCode}</Link>}
+        </p>
+        {game.status === "LOBBY" && <LobbyDisplay game={game} />}
+        {game.status === "TEAMS_SET" && <TeamsDisplay game={game} />}
+        {game.status === "ROUND_ACTIVE" && game.currentRound && (
+          <DisplayRound game={game} round={game.currentRound} lastEventKey={lastEvent?.serverTime ?? null} lastEventName={lastEvent?.event} justRevealed={justRevealed} />
+        )}
+        {(game.status === "FAST_MONEY" || game.status === "FINISHED") && <DisplayFastMoney game={game} clockOffset={clockOffset} justRevealed={justRevealedFm} />}
       </main>
     );
   }

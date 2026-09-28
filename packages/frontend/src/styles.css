@@ -265,3 +265,9 @@ select.input { appearance: auto; }
 .chip--button { border: 2px solid transparent; cursor: pointer; color: var(--white); font: inherit; display: inline-flex; align-items: center; gap: 6px; }
 .chip--picked { border-color: var(--gold); background: var(--gold); color: var(--navy); }
 .chip--picked .roster__order { background: var(--navy); color: var(--gold); }
+
+/* ---------- join QR ---------- */
+.display__join { display: flex; align-items: center; justify-content: center; gap: 40px; flex-wrap: wrap; }
+.display__qr { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.qr { border-radius: 12px; background: #fff; padding: 6px; max-width: 100%; height: auto; }
+.display__join--small { gap: 16px; margin-top: 16px; }
