@@ -2,6 +2,7 @@
 import { useParams } from "react-router-dom";
 import { DisplayFastMoney } from "../components/DisplayFastMoney";
 import { DisplayRound } from "../components/DisplayRound";
+import { JoinQr } from "../components/JoinQr";
 import { MuteToggle } from "../components/MuteToggle";
 import { RealtimeBadge } from "../components/RealtimeBadge";
 import { useGame } from "../hooks/useGame";
@@ -10,13 +11,19 @@ import { useJustRevealedFastMoney } from "../hooks/useJustRevealedFastMoney";
 import { useSounds } from "../hooks/useSounds";
 import type { ApiGame } from "../lib/types";
 
-function LobbyDisplay({ game }: { game: ApiGame }) {
+export function LobbyDisplay({ game }: { game: ApiGame }) {
   return (
     <>
-      <section className="display__code">
-        <p className="label">Join at {window.location.host} with code</p>
-        <div className="display__code-value">{game.joinCode}</div>
-        <p className="muted">{game.players.length === 0 ? "Waiting for players…" : `${game.players.length} in the lobby`}</p>
+      <section className="display__code display__join">
+        <div>
+          <p className="label">Join at {window.location.host} with code</p>
+          <div className="display__code-value">{game.joinCode}</div>
+          <p className="muted">{game.players.length === 0 ? "Waiting for players…" : `${game.players.length} in the lobby`}</p>
+        </div>
+        <div className="display__qr">
+          <JoinQr joinCode={game.joinCode} size={240} />
+          <p className="muted small">Scan to join</p>
+        </div>
       </section>
       <section className="chips" style={{ justifyContent: "center" }}>
         {game.players.map((player) => (
@@ -29,7 +36,7 @@ function LobbyDisplay({ game }: { game: ApiGame }) {
   );
 }
 
-function TeamsDisplay({ game }: { game: ApiGame }) {
+export function TeamsDisplay({ game }: { game: ApiGame }) {
   const unassigned = game.players.filter((player) => player.teamId === null && player.active);
   return (
     <>
@@ -53,9 +60,10 @@ function TeamsDisplay({ game }: { game: ApiGame }) {
           Waiting for a team: {unassigned.map((player) => player.displayName).join(", ")}
         </p>
       )}
-      <p className="muted small" style={{ textAlign: "center" }}>
-        Join code {game.joinCode}
-      </p>
+      <div className="display__join display__join--small">
+        <p className="muted small">Late? Join code {game.joinCode}</p>
+        <JoinQr joinCode={game.joinCode} size={120} />
+      </div>
     </>
   );
 }

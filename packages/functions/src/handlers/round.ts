@@ -13,11 +13,11 @@ import {
 } from "@familyfeud/core";
 import { requiredInt, requiredString, type Args } from "../lib/args.js";
 import { requireHost } from "../lib/auth.js";
-import { putItem, tableName, transactWrite, type TransactItems } from "../lib/db.js";
+import { getItem, putItem, tableName, transactWrite, type TransactItems } from "../lib/db.js";
 import { ConflictError, NotFoundError, ValidationError } from "../lib/errors.js";
 import { currentRoundOf, type FullGame } from "../lib/gameState.js";
 import { keys } from "../lib/keys.js";
-import { roundItem, teamItem } from "../lib/mappers.js";
+import { roundHistory, roundItem, teamItem } from "../lib/mappers.js";
 import { playerMessage, publishPlayerMessages, type PlayerMessage } from "../lib/messages.js";
 import { gameUpdate, type GameEvent, type GameUpdate } from "../lib/views.js";
 
@@ -85,14 +85,23 @@ export function messagesFor(gameId: string, events: readonly RoundEvent[]): Play
   return upNext && upNext.type === "GUESSER_CHANGED" ? [playerMessage(gameId, upNext.playerId, "YOU_ARE_UP")] : [];
 }
 
-/** Load, authorise, apply one reducer action to the current round and persist it. */
+async function loadHistory(gameId: string, roundNumber: number): Promise<RoundData[]> {
+  const item = await getItem(keys.round(gameId, roundNumber));
+  return item ? roundHistory(item) : [];
+}
+
+/**
+ * Load, authorise, apply one reducer action to the current round and persist
+ * it, pushing the previous state onto the round's undo stack.
+ */
 async function applyAction(args: Args, action: RoundAction, fallback: GameEvent): Promise<GameUpdate> {
   const gameId = requiredString(args, "gameId");
   const hostToken = requiredString(args, "hostToken");
   const game = await requireHost(gameId, hostToken);
   const round = requireCurrentRound(game);
   const { round: next, events } = reduce(round, action, roundContext(game));
-  await putItem(roundItem(gameId, next));
+  const history = await loadHistory(gameId, round.number);
+  await putItem(roundItem(gameId, next, [...history, round]));
   await publishPlayerMessages(messagesFor(gameId, events));
   return gameUpdate(withRound(game, next), primaryEvent(events, fallback));
 }
@@ -215,6 +224,23 @@ export function choosePassOrPlay(args: Args): Promise<GameUpdate> {
 
 export function skipGuesser(args: Args): Promise<GameUpdate> {
   return applyAction(args, { type: "SKIP_GUESSER" }, "GUESSER_CHANGED");
+}
+
+/**
+ * Revert the last host action within the round. Buzzes are not on the stack
+ * (the host resets buzzers instead); startRound / endRound touch scores and
+ * cursors and are deliberately not undoable.
+ */
+export async function undoRoundAction(args: Args): Promise<GameUpdate> {
+  const gameId = requiredString(args, "gameId");
+  const hostToken = requiredString(args, "hostToken");
+  const game = await requireHost(gameId, hostToken);
+  const round = requireCurrentRound(game);
+  const history = await loadHistory(gameId, round.number);
+  const previous = history.at(-1);
+  if (!previous) throw new ConflictError("Nothing to undo in this round");
+  await putItem(roundItem(gameId, previous, history.slice(0, -1)));
+  return gameUpdate(withRound(game, previous), "ROUND_UNDONE");
 }
 
 /** End the round: bank the awarded pot; after the last round move to Fast Money. */

@@ -52,7 +52,11 @@ export function FastMoneyBoard({ fastMoney, questionCount, target, questions, ju
         <span className="fm__totalValue">{fastMoney.total}</span>
         <span className="muted small">/ {target}</span>
       </div>
-      {won && <div className="banner banner--gold banner--pulse fm__win">🎉 {target} — YOU WIN! 🎉</div>}
+      {won && (
+        <div className="banner banner--gold banner--pulse fm__win">
+          <span className="fm__winStar" aria-hidden="true">★</span> {target} · YOU WIN! <span className="fm__winStar" aria-hidden="true">★</span>
+        </div>
+      )}
     </div>
   );
 }

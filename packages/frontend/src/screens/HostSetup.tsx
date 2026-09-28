@@ -1,7 +1,10 @@
 // Task 2.8 — game config, survey authoring, Fast Money question authoring.
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
+import { CopyButton } from "../components/CopyButton";
+import { HostTokenGate } from "../components/HostTokenGate";
 import { QuestionEditor, type QuestionDraft } from "../components/QuestionEditor";
+import { QuestionBankTools } from "../components/QuestionBankTools";
 import { RealtimeBadge } from "../components/RealtimeBadge";
 import { useHostGame } from "../hooks/useHostGame";
 import { deleteSurvey, toApiError, updateConfig, upsertFastMoneyQuestion, upsertSurvey } from "../lib/api";
@@ -283,16 +286,16 @@ export function HostSetup() {
   const { game, host, hostToken, isHost, realtime, loading, error, hostError, applyUpdate, patchHost } =
     useHostGame(gameId);
 
-  if (!gameId || !isHost || !hostToken) {
+  if (!gameId) {
     return (
       <main className="page page--narrow">
         <h1>Game Setup</h1>
-        <p className="field-error">This browser doesn't hold the host token for this game.</p>
-        <p>
-          <Link to="/">Back to start</Link>
-        </p>
+        <Link to="/">Back to start</Link>
       </main>
     );
+  }
+  if (!isHost || !hostToken) {
+    return <HostTokenGate gameId={gameId} title="Game Setup" onStored={() => window.location.reload()} />;
   }
 
   if (!game) {
@@ -321,6 +324,7 @@ export function HostSetup() {
           <Link className="button button--small" to={`/host/${gameId}`}>
             Host console →
           </Link>
+          <CopyButton value={hostToken} label="Copy host token" />
           <RealtimeBadge status={realtime} />
         </nav>
       </header>
@@ -332,6 +336,25 @@ export function HostSetup() {
         config={game.config}
         locked={locked}
         onSave={async (config) => applyUpdate(await updateConfig(gameId, hostToken, config))}
+      />
+
+      <QuestionBankTools
+        surveys={surveys}
+        fastMoneyQuestions={fastMoneyQuestions}
+        busy={locked}
+        onImport={async (bank) => {
+          let nextSurvey = surveys.reduce((max, s) => Math.max(max, s.number), 0) + 1;
+          let nextFm = fastMoneyQuestions.reduce((max, q) => Math.max(max, q.number), 0) + 1;
+          const addedSurveys: Survey[] = [];
+          const addedFm: FastMoneyQuestion[] = [];
+          for (const q of bank.surveys) addedSurveys.push(await upsertSurvey(gameId, hostToken, nextSurvey++, q.text, q.answers));
+          for (const q of bank.fastMoney) addedFm.push(await upsertFastMoneyQuestion(gameId, hostToken, nextFm++, q.text, q.answers));
+          patchHost((current) => ({
+            ...current,
+            surveys: [...current.surveys, ...addedSurveys].sort((a, b) => a.number - b.number),
+            fastMoneyQuestions: [...current.fastMoneyQuestions, ...addedFm].sort((a, b) => a.number - b.number),
+          }));
+        }}
       />
 
       <QuestionList<Survey>

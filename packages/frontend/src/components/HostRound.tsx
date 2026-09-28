@@ -19,6 +19,7 @@ export interface HostRoundActions {
   choosePassOrPlay: (playingTeamId: string) => void;
   skipGuesser: () => void;
   endRound: () => void;
+  undo: () => void;
 }
 
 interface Props {
@@ -111,6 +112,9 @@ export function HostRound({ gameId, game, surveys, fullBoard, fullQuestion, busy
       } else if (event.key.toLowerCase() === "x" && canStrike) {
         event.preventDefault();
         actions.strike();
+      } else if (event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        actions.undo();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -226,8 +230,11 @@ export function HostRound({ gameId, game, surveys, fullBoard, fullQuestion, busy
             End round
           </button>
         )}
+        <button className="button button--ghost" type="button" disabled={busy} onClick={actions.undo} title="Revert the last host action in this round">
+          Undo <span className="kbd">Z</span>
+        </button>
       </div>
-      {canReveal && <p className="muted small">Tip: press 1–8 to reveal an answer, X for a strike.</p>}
+      {canReveal && <p className="muted small">Tip: press 1–8 to reveal an answer, X for a strike, Z to undo.</p>}
     </>
   );
 }

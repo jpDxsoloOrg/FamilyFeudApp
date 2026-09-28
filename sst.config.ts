@@ -93,6 +93,7 @@ export default $config({
       "choosePassOrPlay",
       "skipGuesser",
       "endRound",
+      "undoRoundAction",
       "buzz",
       "selectFastMoneyPlayers",
       "startFastMoneyTurn",
@@ -113,12 +114,20 @@ export default $config({
       api.addResolver(`Query ${field}`, { dataSource: lambdaSource.name });
     }
 
+    // Optional custom domain. DNS for jpdxsolo.com lives in Namecheap, not
+    // Route 53, so SST cannot create the records: set SITE_DOMAIN and the ARN
+    // of a validated us-east-1 ACM certificate (SITE_CERT_ARN), then point a
+    // CNAME at the CloudFront domain this stack outputs. Unset → CloudFront URL.
+    const siteDomain = process.env.SITE_DOMAIN;
+    const siteCert = process.env.SITE_CERT_ARN;
+
     const site = new sst.aws.StaticSite("Site", {
       path: "packages/frontend",
       build: {
         command: "npm run build",
         output: "dist",
       },
+      ...(siteDomain && siteCert ? { domain: { name: siteDomain, dns: false, cert: siteCert } } : {}),
       environment: {
         VITE_GRAPHQL_URL: api.url,
         VITE_GRAPHQL_REALTIME_URL: api.nodes.api.uris["REALTIME"],

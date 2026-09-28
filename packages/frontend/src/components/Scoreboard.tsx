@@ -9,21 +9,26 @@ interface Props {
   compact?: boolean;
 }
 
+/** Two team scores with the round pot between them. */
 export function Scoreboard({ teams, pot, multiplier, activeTeamId, compact }: Props) {
+  const [left, right] = teams;
+  const team = (t: ApiTeam | undefined) =>
+    t ? (
+      <div className={`scoreboard__team${t.id === activeTeamId ? " scoreboard__team--active" : ""}`}>
+        <span className="scoreboard__name">{t.name}</span>
+        <span className="scoreboard__score">{t.score}</span>
+      </div>
+    ) : (
+      <div className="scoreboard__team scoreboard__team--empty" />
+    );
   return (
     <div className={`scoreboard${compact ? " scoreboard--compact" : ""}`}>
-      {teams.map((team, index) => (
-        <div key={team.id} className={`scoreboard__team${team.id === activeTeamId ? " scoreboard__team--active" : ""}`}>
-          <span className="scoreboard__name">{team.name}</span>
-          <span className="scoreboard__score">{team.score}</span>
-          {index === 0 && (
-            <div className="scoreboard__pot" key="pot">
-              <span className="label">Pot{multiplier > 1 ? ` ×${multiplier}` : ""}</span>
-              <span className="scoreboard__potValue">{pot}</span>
-            </div>
-          )}
-        </div>
-      ))}
+      {team(left)}
+      <div className="scoreboard__pot">
+        <span className="scoreboard__potLabel">Pot{multiplier > 1 ? ` ×${multiplier}` : ""}</span>
+        <span className="scoreboard__potValue">{pot}</span>
+      </div>
+      {team(right)}
     </div>
   );
 }

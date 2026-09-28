@@ -266,6 +266,8 @@ type Mutation {
   "Advance the current guesser without a strike (player left / not present)."
   skipGuesser(gameId: ID!, hostToken: String!): GameUpdate!
   endRound(gameId: ID!, hostToken: String!): GameUpdate!
+  "Revert the last in-round host action (reveal, strike, arm, winner, pass/play, skip). Not startRound/endRound."
+  undoRoundAction(gameId: ID!, hostToken: String!): GameUpdate!
 
   # ---- Round (player) ----
   "First conditional write wins. Losers receive the current state, not an error."
@@ -310,6 +312,7 @@ type Subscription {
         "choosePassOrPlay"
         "skipGuesser"
         "endRound"
+        "undoRoundAction"
         "buzz"
         "selectFastMoneyPlayers"
         "startFastMoneyTurn"

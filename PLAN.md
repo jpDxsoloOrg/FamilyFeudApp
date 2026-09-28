@@ -239,14 +239,14 @@ code reference these task numbers in their `Not implemented` errors.
 - [x] 4.7 Player Fast Money UI: one question at a time with Submit / Skip, big countdown, "look away" screen for the waiting player, duplicate buzz toast that reopens the question
 - [x] 4.8 Display Fast Money UI: 5-row board, server-synced countdown (`serverTime` skew correction), reveal animation, total, WIN celebration
 
-### Milestone 5 — Polish & ops
-- [ ] 5.1 Design pass on all screens (Family Feud palette, board tile animations, responsive typography); test on a phone + TV
-- [ ] 5.2 Reconnect/resume: rejoin by stored `playerId`, host token recovery, subscription reconnect with re-query
-- [ ] 5.3 Question bank import (CSV/JSON) and export; reuse a bank across games
-- [ ] 5.4 Undo last host action (keep a short action log per round)
-- [ ] 5.5 QR code on the display for joining; spectator mode
-- [ ] 5.6 Deploy pipeline (`npx sst deploy --stage production`), custom domain, GitHub Actions on PR
-- [ ] 5.7 README walkthrough for hosts
+### Milestone 5 — Polish & ops ✅
+- [x] 5.1 Design pass on all screens (Family Feud palette, board tile animations, responsive typography); test on a phone + TV
+- [x] 5.2 Reconnect/resume: rejoin by stored `playerId`, host token recovery, subscription reconnect with re-query
+- [x] 5.3 Question bank import (CSV/JSON) and export; reuse a bank across games
+- [x] 5.4 Undo last host action (keep a short action log per round)
+- [x] 5.5 QR code on the display for joining; spectator mode
+- [x] 5.6 Deploy pipeline (`npx sst deploy --stage production`), custom domain, GitHub Actions on PR
+- [x] 5.7 README walkthrough for hosts
 
 ## Future work
 

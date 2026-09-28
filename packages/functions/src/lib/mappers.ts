@@ -344,9 +344,24 @@ export function fastMoneyResponseItem(gameId: string, response: FastMoneyRespons
   return { pk: `GAME#${gameId}`, sk: `FMRESP#${slot}#${String(questionIndex).padStart(3, "0")}`, ...rest };
 }
 
-export function roundItem(gameId: string, round: RoundData): RoundItem {
+/** Undo depth kept on the round item. */
+export const ROUND_HISTORY_LIMIT = 10;
+
+export function roundItem(gameId: string, round: RoundData, history: readonly RoundData[] = []): RoundItem {
   const { number, ...rest } = round;
-  return { pk: `GAME#${gameId}`, sk: `ROUND#${String(number).padStart(3, "0")}`, ...rest };
+  return {
+    pk: `GAME#${gameId}`,
+    sk: `ROUND#${String(number).padStart(3, "0")}`,
+    ...rest,
+    history: history.slice(-ROUND_HISTORY_LIMIT).map(({ number: _n, ...snapshot }) => snapshot),
+  };
+}
+
+/** The undo stack stored on a round item: previous states, oldest first. */
+export function roundHistory(item: Item): RoundData[] {
+  const raw = item.history;
+  if (!Array.isArray(raw)) return [];
+  return raw.map((snapshot) => toRound({ pk: item.pk, sk: item.sk, ...(snapshot as Record<string, unknown>) }));
 }
 
 export function teamItem(gameId: string, team: Team): TeamItem {

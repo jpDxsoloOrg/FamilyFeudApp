@@ -13,6 +13,7 @@ export function App() {
         <Route path="/host/:gameId" element={<Host />} />
         <Route path="/host/:gameId/setup" element={<HostSetup />} />
         <Route path="/display/:gameId" element={<Display />} />
+        <Route path="/watch/:gameId" element={<Display />} />
         <Route path="/play/:gameId" element={<Play />} />
       </Routes>
     </BrowserRouter>

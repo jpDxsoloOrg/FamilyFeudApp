@@ -15,6 +15,7 @@ import {
   skipGuesser,
   startRound,
   strike,
+  undoRoundAction,
 } from "./round.js";
 
 let table: FakeTable;
@@ -152,6 +153,51 @@ describe("round actions", () => {
     await startRound({ ...host, surveyNumber: 1 });
     await expect(revealAnswer({ ...host, index: 0 })).rejects.toThrow(ConflictError);
     await expect(endRound(host)).rejects.toThrow(ConflictError);
+  });
+});
+
+describe("undoRoundAction", () => {
+  it("reverts host actions one at a time, oldest state last", async () => {
+    await startRound({ ...host, surveyNumber: 1 });
+    await expect(undoRoundAction(host)).rejects.toThrow(/Nothing to undo/);
+    await armBuzzers(host);
+    await setFaceOffWinner({ ...host, teamId: "t1" });
+    await choosePassOrPlay({ ...host, playingTeamId: "t1" });
+    let update = await revealAnswer({ ...host, index: 0 });
+    expect(update.game.currentRound?.pot).toBe(55);
+
+    update = await undoRoundAction(host);
+    expect(update.event).toBe("ROUND_UNDONE");
+    expect(update.game.currentRound).toMatchObject({ state: "PLAYING", pot: 0 });
+    expect(update.game.currentRound?.board[0]?.revealed).toBe(false);
+    expect(table.get(`GAME#${GAME_ID}`, "ROUND#001")).toMatchObject({ state: "PLAYING", pot: 0 });
+
+    update = await undoRoundAction(host);
+    expect(update.game.currentRound?.state).toBe("PASS_OR_PLAY");
+    update = await undoRoundAction(host);
+    expect(update.game.currentRound?.state).toBe("FACE_OFF_ARMED");
+    update = await undoRoundAction(host);
+    expect(update.game.currentRound?.state).toBe("PICK_CONTESTANTS");
+    await expect(undoRoundAction(host)).rejects.toThrow(/Nothing to undo/);
+  });
+
+  it("undo then redo-by-hand keeps a clean stack", async () => {
+    await startRound({ ...host, surveyNumber: 1 });
+    await armBuzzers(host);
+    await undoRoundAction(host);
+    await armBuzzers(host);
+    const item = table.get(`GAME#${GAME_ID}`, "ROUND#001");
+    expect(Array.isArray(item?.history) ? item.history.length : -1).toBe(1);
+  });
+
+  it("caps the stack at ten states", async () => {
+    await startRound({ ...host, surveyNumber: 1 });
+    await armBuzzers(host);
+    await setFaceOffWinner({ ...host, teamId: "t1" });
+    await choosePassOrPlay({ ...host, playingTeamId: "t1" });
+    for (let i = 0; i < 12; i++) await skipGuesser(host);
+    const item = table.get(`GAME#${GAME_ID}`, "ROUND#001");
+    expect(Array.isArray(item?.history) ? item.history.length : -1).toBe(10);
   });
 });
 

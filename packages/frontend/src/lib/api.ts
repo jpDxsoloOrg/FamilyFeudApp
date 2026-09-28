@@ -272,6 +272,10 @@ export function endRound(gameId: string, hostToken: string): Promise<ApiGameUpda
   return hostMutation("endRound", "", "", { gameId, hostToken });
 }
 
+export function undoRoundAction(gameId: string, hostToken: string): Promise<ApiGameUpdate> {
+  return hostMutation("undoRoundAction", "", "", { gameId, hostToken });
+}
+
 export async function buzz(gameId: string, playerId: string): Promise<ApiGameUpdate> {
   const data = await gql<{ buzz: ApiGameUpdate }>(
     `mutation Buzz($gameId: ID!, $playerId: ID!) { buzz(gameId: $gameId, playerId: $playerId) { ${GAME_UPDATE_FIELDS} } }`,

@@ -147,6 +147,7 @@ export type GameEvent =
   | "STEAL_OPPORTUNITY"
   | "POT_AWARDED"
   | "ROUND_ENDED"
+  | "ROUND_UNDONE"
   | "FM_PLAYERS_SELECTED"
   | "FM_TIMER_STARTED"
   | "FM_TURN_ENDED"

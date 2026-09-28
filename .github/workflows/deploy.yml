@@ -1,0 +1,39 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: SST stage to deploy
+        default: production
+        required: true
+
+# One deploy at a time per stage; SST state does not like concurrent runs.
+concurrency:
+  group: deploy-${{ github.event.inputs.stage || 'production' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.stage || 'production' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - run: npx sst install
+      - run: npx sst deploy --stage ${{ github.event.inputs.stage || 'production' }}
+        env:
+          # Optional custom domain for the site (see sst.config.ts). Leave unset to use the CloudFront URL.
+          SITE_DOMAIN: ${{ vars.SITE_DOMAIN }}
+          SITE_CERT_ARN: ${{ vars.SITE_CERT_ARN }}

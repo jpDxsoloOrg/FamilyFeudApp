@@ -1,6 +1,6 @@
 // Task 2.7 — join a game with a code + name, or host a new one.
 import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ApiError, createGame, joinGame, toApiError } from "../lib/api";
 import {
   getDisplayName,
@@ -29,8 +29,10 @@ function fieldFor(error: ApiError): "joinCode" | "name" | undefined {
 
 export function Join() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const returning = getLastGame();
-  const [joinCode, setJoinCode] = useState(returning?.joinCode ?? "");
+  const scanned = params.get("code")?.trim().toUpperCase() ?? "";
+  const [joinCode, setJoinCode] = useState(scanned || (returning?.joinCode ?? ""));
   const [name, setName] = useState(getDisplayName() ?? "");
   const [error, setError] = useState<string>();
   const [errorField, setErrorField] = useState<"joinCode" | "name">();
@@ -78,8 +80,11 @@ export function Join() {
 
   return (
     <main className="page page--narrow join">
-      <h1 className="join__title">Family Feud</h1>
-      <p className="muted">Survey says… grab your phone and join the game.</p>
+      <div className="logo" aria-label="Family Feud">
+        <span className="logo__word">Family</span>
+        <span className="logo__word">Feud</span>
+      </div>
+      <p className="muted join__tagline">Survey says… grab your phone and join the game.</p>
 
       {returning && (
         <p className="muted">
