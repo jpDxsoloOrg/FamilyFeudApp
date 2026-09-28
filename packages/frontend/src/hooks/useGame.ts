@@ -77,6 +77,21 @@ export function useGame(gameId: string | undefined): UseGameResult {
     refresh();
   }, [gameId, refresh]);
 
+  // A phone that slept or a laptop that lost wifi may have missed events the
+  // socket never noticed; a re-read on return is cheap insurance.
+  useEffect(() => {
+    if (!gameId) return;
+    const onVisible = (): void => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", refresh);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", refresh);
+    };
+  }, [gameId, refresh]);
+
   useEffect(() => {
     if (!gameId) return;
     let hasBeenLive = false;

@@ -1,6 +1,6 @@
 // Task 2.9 — player lobby view. Round / Fast Money controls come in 3.8 / 4.7.
 import { Link, useParams } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MuteToggle } from "../components/MuteToggle";
 import { PlayFastMoney } from "../components/PlayFastMoney";
 import { PlayRound } from "../components/PlayRound";
@@ -10,8 +10,8 @@ import { useJustRevealed } from "../hooks/useJustRevealed";
 import { useJustRevealedFastMoney } from "../hooks/useJustRevealedFastMoney";
 import { usePlayerMessages } from "../hooks/usePlayerMessages";
 import { useSounds } from "../hooks/useSounds";
-import { buzz, toApiError } from "../lib/api";
-import { getPlayerId } from "../lib/identity";
+import { buzz, joinGame, toApiError } from "../lib/api";
+import { getDisplayName, getLastGame, getPlayerId, setLastGame } from "../lib/identity";
 import type { ApiGame } from "../lib/types";
 
 function PlayerLobby({ game, me }: { game: ApiGame; me: string }) {
@@ -87,6 +87,27 @@ export function Play() {
   const justRevealedFm = useJustRevealedFastMoney(game?.fastMoney);
   const [buzzing, setBuzzing] = useState(false);
   const [problem, setProblem] = useState<string>();
+  const rejoinTried = useRef(false);
+
+  /**
+   * Resume: if this browser joined this game before (or has a name on file),
+   * re-run the idempotent join so a cleared server seat or a fresh tab lands
+   * back on the same player id without a trip through the join form.
+   */
+  useEffect(() => {
+    if (!game || !gameId || rejoinTried.current) return;
+    if (game.players.some((player) => player.id === me)) return;
+    if (game.status === "FINISHED") return;
+    const name = getLastGame()?.gameId === gameId ? getLastGame()?.displayName : getDisplayName();
+    if (!name) return;
+    rejoinTried.current = true;
+    joinGame(game.joinCode, me, name)
+      .then((update) => {
+        setLastGame({ gameId, joinCode: game.joinCode, displayName: name });
+        applyUpdate(update);
+      })
+      .catch((cause: unknown) => setProblem(toApiError(cause).message));
+  }, [game, gameId, me, applyUpdate]);
 
   async function onBuzz(): Promise<void> {
     if (!gameId) return;

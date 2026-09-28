@@ -1,7 +1,9 @@
 // Task 2.9 — host console: lobby & roster management. Round / Fast Money UIs come in 3.6 / 4.6.
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { CopyButton } from "../components/CopyButton";
 import { HostFastMoney } from "../components/HostFastMoney";
+import { HostTokenGate } from "../components/HostTokenGate";
 import { HostRound } from "../components/HostRound";
 import { MuteToggle } from "../components/MuteToggle";
 import { RealtimeBadge } from "../components/RealtimeBadge";
@@ -52,16 +54,16 @@ export function Host() {
   const [problem, setProblem] = useState<string>();
   const [copied, setCopied] = useState(false);
 
-  if (!gameId || !isHost || !hostToken) {
+  if (!gameId) {
     return (
       <main className="page page--narrow">
         <h1>Host Console</h1>
-        <p className="field-error">This browser doesn't hold the host token for this game.</p>
-        <p>
-          <Link to="/">Back to start</Link>
-        </p>
+        <Link to="/">Back to start</Link>
       </main>
     );
+  }
+  if (!isHost || !hostToken) {
+    return <HostTokenGate gameId={gameId} title="Host Console" onStored={() => window.location.reload()} />;
   }
 
   if (!game) {
@@ -113,6 +115,7 @@ export function Host() {
           <button className="button button--small button--ghost" type="button" onClick={copyDisplayLink}>
             {copied ? "Copied" : "Copy display link"}
           </button>
+          <CopyButton value={hostToken} label="Copy host token" />
           <MuteToggle muted={muted} onToggle={toggleMuted} />
           <RealtimeBadge status={realtime} />
         </nav>
