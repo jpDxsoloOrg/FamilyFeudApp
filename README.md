@@ -8,7 +8,9 @@ finale. A shared display screen shows the same board players see on their phones
 **Stack:** AWS AppSync (GraphQL + subscriptions) · Lambda · DynamoDB · SST v3 · React + Vite.
 Same architecture as Know It Owl.
 
-See [PLAN.md](./PLAN.md) for the full product and architecture plan.
+See [PLAN.md](./PLAN.md) for the full product and architecture plan,
+[docs/hosting-guide.md](./docs/hosting-guide.md) for how to run a game night, and
+[docs/deploying.md](./docs/deploying.md) for stages, CI/CD and the custom domain.
 
 ## Repo layout
 
@@ -29,8 +31,9 @@ npm test               # run core + functions unit tests (vitest)
 npm run typecheck      # typecheck all workspaces
 npm run dev            # run the frontend locally (needs packages/frontend/.env.local, see .env.example)
 npm run build          # build the frontend
+npx sst install        # once: fetch the pulumi providers
 npx sst dev            # live-develop against AWS (requires AWS credentials)
-npx sst deploy         # deploy
+npx sst deploy         # deploy your personal stage; --stage dev / production for the shared ones
 ```
 
 ## Screens
@@ -41,7 +44,8 @@ npx sst deploy         # deploy
 | `/host/:gameId` | Host console (needs the host token saved at creation) |
 | `/host/:gameId/setup` | Settings (rounds, multipliers, strikes, Fast Money timers/target) + survey / Fast Money question authoring |
 | `/display/:gameId` | Big-screen board for the TV |
-| `/play/:gameId` | Player view: same board + buzzer / Fast Money controls |
+| `/play/:gameId` | Player view: same board + buzzer / Fast Money controls (read-only spectator view for anyone not on the roster) |
+| `/watch/:gameId` | The display, for a phone that just wants to follow along |
 
 ## Status
 
@@ -57,4 +61,6 @@ npx sst deploy         # deploy
   turns with a skew-corrected countdown, questions delivered only to the answering phone with
   skip-to-back, duplicate buzz, host-matched reveals with a running total and a win at the
   target, then finish.
-- Milestone 5 (polish and ops) is next.
+- Milestone 5 (polish and ops) is done: design pass, reconnect/resume and host token
+  recovery, question bank import/export, undo, QR join and spectator mode, CI and production
+  deploy workflows, and the hosting guide.
