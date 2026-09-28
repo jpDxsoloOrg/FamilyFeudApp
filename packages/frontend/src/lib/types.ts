@@ -84,6 +84,21 @@ export interface ApiPlayerMessage {
   serverTime: number;
 }
 
+export interface ApiFastMoneyPrompt {
+  questionIndex: number;
+  text: string;
+}
+
+/** The schema's `FastMoneyView`: what the answering player sees. */
+export interface ApiFastMoneyView {
+  slot: number;
+  timerEndsAt: number | null;
+  serverTime: number;
+  queue: ApiFastMoneyPrompt[];
+  answered: number;
+  total: number;
+}
+
 export interface SurveyAnswerInput {
   text: string;
   points: number;

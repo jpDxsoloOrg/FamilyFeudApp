@@ -1,10 +1,12 @@
 // Task 2.9 — big-screen lobby. Round / Fast Money boards come in 3.7 / 4.8.
 import { useParams } from "react-router-dom";
+import { DisplayFastMoney } from "../components/DisplayFastMoney";
 import { DisplayRound } from "../components/DisplayRound";
 import { MuteToggle } from "../components/MuteToggle";
 import { RealtimeBadge } from "../components/RealtimeBadge";
 import { useGame } from "../hooks/useGame";
 import { useJustRevealed } from "../hooks/useJustRevealed";
+import { useJustRevealedFastMoney } from "../hooks/useJustRevealedFastMoney";
 import { useSounds } from "../hooks/useSounds";
 import type { ApiGame } from "../lib/types";
 
@@ -60,9 +62,10 @@ function TeamsDisplay({ game }: { game: ApiGame }) {
 
 export function Display() {
   const { gameId } = useParams<{ gameId: string }>();
-  const { game, realtime, loading, error, lastEvent } = useGame(gameId);
+  const { game, realtime, loading, error, lastEvent, clockOffset } = useGame(gameId);
   const { muted, toggleMuted } = useSounds(lastEvent);
   const justRevealed = useJustRevealed(game?.currentRound);
+  const justRevealedFm = useJustRevealedFastMoney(game?.fastMoney);
 
   if (!game) {
     return (
@@ -95,10 +98,7 @@ export function Display() {
       )}
       {game.status === "ROUND_ACTIVE" && !game.currentRound && <TeamsDisplay game={game} />}
       {(game.status === "FAST_MONEY" || game.status === "FINISHED") && (
-        <section className="card">
-          <h2>Fast Money</h2>
-          <p className="muted">Arrives in Milestone 4.</p>
-        </section>
+        <DisplayFastMoney game={game} clockOffset={clockOffset} justRevealed={justRevealedFm} />
       )}
     </main>
   );

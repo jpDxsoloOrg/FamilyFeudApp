@@ -10,6 +10,8 @@ const SOUND_FOR_EVENT: Partial<Record<string, SoundName>> = {
   ANSWER_REVEALED: "ding",
   STRIKE: "strike",
   POT_AWARDED: "win",
+  FM_ANSWER_REVEALED: "ding",
+  GAME_FINISHED: "win",
 };
 
 export function useSounds(lastEvent: ApiGameUpdate | undefined): { muted: boolean; toggleMuted: () => void } {

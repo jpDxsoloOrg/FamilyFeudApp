@@ -339,6 +339,11 @@ export function playerItem(gameId: string, player: Player): PlayerItem {
   };
 }
 
+export function fastMoneyResponseItem(gameId: string, response: FastMoneyResponse): FastMoneyResponseItem {
+  const { slot, questionIndex, ...rest } = response;
+  return { pk: `GAME#${gameId}`, sk: `FMRESP#${slot}#${String(questionIndex).padStart(3, "0")}`, ...rest };
+}
+
 export function roundItem(gameId: string, round: RoundData): RoundItem {
   const { number, ...rest } = round;
   return { pk: `GAME#${gameId}`, sk: `ROUND#${String(number).padStart(3, "0")}`, ...rest };

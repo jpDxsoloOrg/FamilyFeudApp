@@ -4,6 +4,7 @@
  * host view is built on top of it and gated by `requireHost`.
  */
 import {
+  isDuplicate,
   toPublicFastMoneyRows,
   toPublicRound,
   type BoardAnswer,
@@ -97,11 +98,13 @@ export interface HostGameView {
 
 /**
  * Everything the host console needs. Only ever returned after `requireHost`.
- * `likelyDuplicate` is wired to core `isDuplicate` in Task 4.4; until then it
- * is always false.
+ * `likelyDuplicate` flags a player-2 answer that normalises to player 1's
+ * answer for the same question, so the host can buzz it.
  */
 export function toHostGame(game: FullGame): HostGameView {
   const round = currentRoundOf(game);
+  const answerOf = (slot: number, questionIndex: number): string | null =>
+    game.fastMoney.responses.find((r) => r.slot === slot && r.questionIndex === questionIndex)?.answer ?? null;
   return {
     game: toPublicGame(game),
     surveys: game.surveys,
@@ -113,7 +116,7 @@ export function toHostGame(game: FullGame): HostGameView {
       questionIndex: response.questionIndex,
       answer: response.answer,
       skipped: response.skipped,
-      likelyDuplicate: false,
+      likelyDuplicate: response.slot === 2 && isDuplicate(answerOf(1, response.questionIndex), response.answer),
       matchedIndex: response.matchedIndex,
       points: response.revealed ? response.points : null,
       revealed: response.revealed,

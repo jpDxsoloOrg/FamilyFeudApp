@@ -2,10 +2,12 @@
 import { Link, useParams } from "react-router-dom";
 import { useState } from "react";
 import { MuteToggle } from "../components/MuteToggle";
+import { PlayFastMoney } from "../components/PlayFastMoney";
 import { PlayRound } from "../components/PlayRound";
 import { RealtimeBadge } from "../components/RealtimeBadge";
 import { useGame } from "../hooks/useGame";
 import { useJustRevealed } from "../hooks/useJustRevealed";
+import { useJustRevealedFastMoney } from "../hooks/useJustRevealedFastMoney";
 import { usePlayerMessages } from "../hooks/usePlayerMessages";
 import { useSounds } from "../hooks/useSounds";
 import { buzz, toApiError } from "../lib/api";
@@ -77,11 +79,12 @@ function PlayerLobby({ game, me }: { game: ApiGame; me: string }) {
 
 export function Play() {
   const { gameId } = useParams<{ gameId: string }>();
-  const { game, realtime, loading, error, lastEvent, applyUpdate } = useGame(gameId);
+  const { game, realtime, loading, error, lastEvent, clockOffset, applyUpdate } = useGame(gameId);
   const me = getPlayerId();
   const { last: lastMessage } = usePlayerMessages(gameId, me);
   const { muted, toggleMuted } = useSounds(lastEvent);
   const justRevealed = useJustRevealed(game?.currentRound);
+  const justRevealedFm = useJustRevealedFastMoney(game?.fastMoney);
   const [buzzing, setBuzzing] = useState(false);
   const [problem, setProblem] = useState<string>();
 
@@ -131,11 +134,16 @@ export function Play() {
         />
       )}
       {game.status === "ROUND_ACTIVE" && !game.currentRound && <PlayerLobby game={game} me={me} />}
-      {(game.status === "FAST_MONEY" || game.status === "FINISHED") && (
-        <section className="card">
-          <h2>Fast Money</h2>
-          <p className="muted">Arrives in Milestone 4.</p>
-        </section>
+      {(game.status === "FAST_MONEY" || game.status === "FINISHED") && gameId && (
+        <PlayFastMoney
+          gameId={gameId}
+          game={game}
+          me={me}
+          clockOffset={clockOffset}
+          lastEvent={lastEvent}
+          lastMessage={lastMessage}
+          justRevealed={justRevealedFm}
+        />
       )}
     </main>
   );
