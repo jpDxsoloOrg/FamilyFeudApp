@@ -8,6 +8,8 @@ import {
   buzzDuplicate,
   endFastMoneyTurn,
   fastMoneyView,
+  finishGame,
+  revealFastMoneyAnswer,
   selectFastMoneyPlayers,
   skipFastMoneyQuestion,
   startFastMoneyTurn,
@@ -200,5 +202,56 @@ describe("buzzDuplicate", () => {
   it("only during player 2's turn", async () => {
     await endFastMoneyTurn(host);
     await expect(buzzDuplicate({ ...host, questionIndex: 1 })).rejects.toThrow(/player 2's turn/);
+  });
+});
+
+describe("revealFastMoneyAnswer / finishGame", () => {
+  beforeEach(async () => {
+    await selectFastMoneyPlayers({ ...host, teamId: "t1", playerIds: ["a1", "a2"] });
+    vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+    await startFastMoneyTurn({ ...host, slot: 1 });
+    await submitFastMoneyAnswer({ gameId: GAME_ID, playerId: "a1", questionIndex: 0, answer: "top1" });
+    await submitFastMoneyAnswer({ gameId: GAME_ID, playerId: "a1", questionIndex: 1, answer: "nothing" });
+    await endFastMoneyTurn(host);
+    await startFastMoneyTurn({ ...host, slot: 2 });
+    await submitFastMoneyAnswer({ gameId: GAME_ID, playerId: "a2", questionIndex: 0, answer: "low1" });
+  });
+
+  it("is only allowed in REVEAL", async () => {
+    await expect(revealFastMoneyAnswer({ ...host, slot: 1, questionIndex: 0, matchedIndex: 0 })).rejects.toThrow(/after both turns/);
+  });
+
+  it("scores matched answers, zero for not-on-board, and totals across both players", async () => {
+    await endFastMoneyTurn(host);
+    let update = await revealFastMoneyAnswer({ ...host, slot: 1, questionIndex: 0, matchedIndex: 0 });
+    expect(update.event).toBe("FM_ANSWER_REVEALED");
+    expect(update.game.fastMoney?.rows.find((r) => r.slot === 1 && r.questionIndex === 0)).toMatchObject({ answer: "top1", points: 60, revealed: true });
+    expect(update.game.fastMoney?.total).toBe(60);
+    // Unrevealed rows still hide their answers in the public payload.
+    expect(update.game.fastMoney?.rows.find((r) => r.slot === 1 && r.questionIndex === 1)).toMatchObject({ answer: null, points: null, revealed: false });
+
+    update = await revealFastMoneyAnswer({ ...host, slot: 1, questionIndex: 1, matchedIndex: null });
+    expect(update.game.fastMoney?.rows.find((r) => r.slot === 1 && r.questionIndex === 1)).toMatchObject({ answer: "nothing", points: 0, revealed: true });
+
+    update = await revealFastMoneyAnswer({ ...host, slot: 2, questionIndex: 0, matchedIndex: 1 });
+    expect(update.game.fastMoney?.total).toBe(80);
+    expect(table.get(`GAME#${GAME_ID}`, "FMRESP#2#000")).toMatchObject({ revealed: true, matchedIndex: 1, points: 20 });
+
+    await expect(revealFastMoneyAnswer({ ...host, slot: 2, questionIndex: 0, matchedIndex: 1 })).rejects.toThrow(/already revealed/);
+    await expect(revealFastMoneyAnswer({ ...host, slot: 2, questionIndex: 1, matchedIndex: 7 })).rejects.toThrow(ValidationError);
+    // An unanswered (skipped / timed out) row can still be revealed as 0.
+    update = await revealFastMoneyAnswer({ ...host, slot: 2, questionIndex: 1 });
+    expect(update.game.fastMoney?.rows.find((r) => r.slot === 2 && r.questionIndex === 1)).toMatchObject({ answer: null, points: 0, revealed: true });
+  });
+
+  it("finishGame moves to FINISHED and locks Fast Money", async () => {
+    await endFastMoneyTurn(host);
+    const update = await finishGame(host);
+    expect(update.event).toBe("GAME_FINISHED");
+    expect(update.game.status).toBe("FINISHED");
+    expect(update.game.fastMoney?.stage).toBe("DONE");
+    expect(meta()).toMatchObject({ status: "FINISHED", fastMoneyStage: "DONE", timerEndsAt: null });
+    await expect(finishGame(host)).rejects.toThrow(/not started/);
+    await expect(revealFastMoneyAnswer({ ...host, slot: 1, questionIndex: 0 })).rejects.toThrow(ConflictError);
   });
 });

@@ -10,7 +10,7 @@ import {
   type FastMoneySlot,
   type FastMoneyStage,
 } from "@familyfeud/core";
-import { requiredArray, requiredInt, requiredString, type Args } from "../lib/args.js";
+import { optionalInt, requiredArray, requiredInt, requiredString, type Args } from "../lib/args.js";
 import { requireHost } from "../lib/auth.js";
 import { batchWrite, putItem, updateItem } from "../lib/db.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../lib/errors.js";
@@ -266,11 +266,54 @@ export async function buzzDuplicate(args: Args): Promise<PlayerMessage> {
   return playerMessage(gameId, playerId, "FAST_MONEY_DUPLICATE", String(questionIndex));
 }
 
-export async function revealFastMoneyAnswer(_args: Args): Promise<unknown> {
-  throw new Error("Not implemented: revealFastMoneyAnswer (Task 4.5)");
+/* ---------- 4.5 — reveal and finish ---------- */
+
+/**
+ * Reveal one answer. The host decides which board answer it matches
+ * (`matchedIndex`), or null for "not on the board" = 0 points. The public
+ * total is derived from revealed rows, so the win at `fastMoneyTarget` is
+ * visible to every screen from the broadcast alone.
+ */
+export async function revealFastMoneyAnswer(args: Args): Promise<GameUpdate> {
+  const gameId = requiredString(args, "gameId");
+  const hostToken = requiredString(args, "hostToken");
+  const slot = requiredInt(args, "slot", { min: 1, max: 2 }) as FastMoneySlot;
+  const questionIndex = requiredInt(args, "questionIndex", { min: 0 });
+  const matchedIndex = optionalInt(args, "matchedIndex", { min: 0 }) ?? null;
+
+  const game = await requireHost(gameId, hostToken);
+  requireFastMoney(game);
+  if (game.fastMoney.stage !== "REVEAL") throw new ConflictError("Answers are revealed after both turns");
+  const row = game.fastMoney.responses.find((r) => r.slot === slot && r.questionIndex === questionIndex);
+  if (!row) throw new NotFoundError(`No Fast Money question ${questionIndex}`);
+  if (row.revealed) throw new ConflictError("That answer is already revealed");
+
+  let points = 0;
+  if (matchedIndex !== null) {
+    const question = game.fastMoneyQuestions[questionIndex];
+    const match = question?.answers[matchedIndex];
+    if (!match) throw new ValidationError(`Question ${questionIndex + 1} has no board answer ${matchedIndex + 1}`);
+    points = match.points;
+  }
+  const revealed: FastMoneyResponse = { ...row, revealed: true, matchedIndex, points };
+  await putItem(fastMoneyResponseItem(gameId, revealed));
+  const responses = game.fastMoney.responses.map((r) => (r.slot === slot && r.questionIndex === questionIndex ? revealed : r));
+  return gameUpdate(withFastMoney(game, { responses }), "FM_ANSWER_REVEALED");
 }
 
-export async function finishGame(_args: Args): Promise<unknown> {
-  throw new Error("Not implemented: finishGame (Task 4.5)");
+/** Wrap up: FAST_MONEY → FINISHED. Allowed at any Fast Money stage so a host can call it a night. */
+export async function finishGame(args: Args): Promise<GameUpdate> {
+  const gameId = requiredString(args, "gameId");
+  const hostToken = requiredString(args, "hostToken");
+
+  const game = await requireHost(gameId, hostToken);
+  requireFastMoney(game);
+  await updateItem(keys.game(gameId), {
+    updateExpression: "SET #status = :finished, fastMoneyStage = :done, timerEndsAt = :null",
+    names: { "#status": "status" },
+    values: { ":finished": "FINISHED", ":done": "DONE", ":null": null },
+    conditionExpression: "attribute_exists(pk)",
+  });
+  return gameUpdate({ ...withFastMoney(game, { stage: "DONE", timerEndsAt: null }), status: "FINISHED" }, "GAME_FINISHED");
 }
 
