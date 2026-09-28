@@ -116,6 +116,10 @@ export const ON_GAME_UPDATED = `subscription OnGameUpdated($gameId: ID!) {
   onGameUpdated(gameId: $gameId) { ${GAME_UPDATE_FIELDS} }
 }`;
 
+export const ON_PLAYER_MESSAGE = `subscription OnPlayerMessage($gameId: ID!, $playerId: ID!) {
+  onPlayerMessage(gameId: $gameId, playerId: $playerId) { gameId playerId type detail serverTime }
+}`;
+
 /* ---------- queries ---------- */
 
 export async function fetchGame(gameId: string): Promise<ApiGame | null> {

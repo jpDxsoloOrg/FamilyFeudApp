@@ -16,6 +16,7 @@ import {
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { mockClient } from "aws-sdk-client-mock";
 import { setClient } from "../lib/db.js";
+import { setMessageTransport } from "../lib/messages.js";
 
 type Item = Record<string, unknown>;
 type Values = Record<string, unknown>;
@@ -119,9 +120,14 @@ export interface FakeTable {
   reset(): void;
 }
 
-/** Install the fake as the document client and return its backing store. */
+/**
+ * Install the fake as the document client and return its backing store. Also
+ * silences private-message publishing; a test that cares installs its own
+ * transport afterwards.
+ */
 export function installFakeDynamo(): FakeTable {
   process.env.TABLE_NAME ??= "familyfeud-test";
+  setMessageTransport(async () => {});
   const items = new Map<string, Item>();
   const ddbMock = mockClient(DynamoDBDocumentClient);
   ddbMock.reset();

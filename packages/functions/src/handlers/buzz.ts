@@ -4,6 +4,7 @@ import { isConditionFailure, updateItem } from "../lib/db.js";
 import { ForbiddenError, NotFoundError } from "../lib/errors.js";
 import { loadGame, type FullGame } from "../lib/gameState.js";
 import { keys } from "../lib/keys.js";
+import { playerMessage, publishPlayerMessages } from "../lib/messages.js";
 import { gameUpdate, type GameUpdate } from "../lib/views.js";
 import { requireCurrentRound } from "./round.js";
 
@@ -47,6 +48,12 @@ export async function buzzWithOutcome(args: Args): Promise<BuzzOutcome> {
     if (!latest) throw new NotFoundError("No such game");
     return { update: gameUpdate(latest, "BUZZ"), won: false };
   }
+
+  await publishPlayerMessages(
+    Object.values(round.contestants).map((contestant) =>
+      playerMessage(gameId, contestant, "BUZZ_RESULT", contestant === playerId ? "WON" : "LOST"),
+    ),
+  );
 
   const won: FullGame = {
     ...game,

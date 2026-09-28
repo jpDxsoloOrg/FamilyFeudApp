@@ -18,6 +18,7 @@ import { ConflictError, NotFoundError, ValidationError } from "../lib/errors.js"
 import { currentRoundOf, type FullGame } from "../lib/gameState.js";
 import { keys } from "../lib/keys.js";
 import { roundItem, teamItem } from "../lib/mappers.js";
+import { playerMessage, publishPlayerMessages, type PlayerMessage } from "../lib/messages.js";
 import { gameUpdate, type GameEvent, type GameUpdate } from "../lib/views.js";
 
 const EVENT_NAME: Record<RoundEvent["type"], GameEvent> = {
@@ -78,6 +79,12 @@ function pickContestant(game: FullGame, team: Team): { playerId: string; team: T
   }
 }
 
+/** Private nudges implied by reducer events: whoever is now up gets YOU_ARE_UP. */
+export function messagesFor(gameId: string, events: readonly RoundEvent[]): PlayerMessage[] {
+  const upNext = [...events].reverse().find((event) => event.type === "GUESSER_CHANGED");
+  return upNext && upNext.type === "GUESSER_CHANGED" ? [playerMessage(gameId, upNext.playerId, "YOU_ARE_UP")] : [];
+}
+
 /** Load, authorise, apply one reducer action to the current round and persist it. */
 async function applyAction(args: Args, action: RoundAction, fallback: GameEvent): Promise<GameUpdate> {
   const gameId = requiredString(args, "gameId");
@@ -86,6 +93,7 @@ async function applyAction(args: Args, action: RoundAction, fallback: GameEvent)
   const round = requireCurrentRound(game);
   const { round: next, events } = reduce(round, action, roundContext(game));
   await putItem(roundItem(gameId, next));
+  await publishPlayerMessages(messagesFor(gameId, events));
   return gameUpdate(withRound(game, next), primaryEvent(events, fallback));
 }
 
