@@ -229,15 +229,15 @@ code reference these task numbers in their `Not implemented` errors.
 - [x] 3.8 Player round UI: same board components sized for phone; full-screen `BUZZ` button for contestants when armed; "You're up!" banner; team roster with your position highlighted
 - [x] 3.9 Sound effects (buzz, ding, strike) with a mute toggle; respect autoplay rules (unlock on first tap)
 
-### Milestone 4 — Fast Money
-- [ ] 4.1 `core/fastMoney.ts`: `emptyResponses`, `buildQueue` (skips come back in skip order), `skipQuestion`, `answerQuestion`, `clearAnswer`, `normalizeAnswer`, `isDuplicate`, `suggestMatch`, `totalPoints`, `isWithinDeadline` + vitest
-- [ ] 4.2 `selectFastMoneyPlayers` (leading team preselected, host override), `startFastMoneyTurn` (sets `timerEndsAt` from config), `endFastMoneyTurn`
-- [ ] 4.3 `fastMoneyView` query (only the active slot's player receives questions) and player mutations `submitFastMoneyAnswer` / `skipFastMoneyQuestion` validated against `timerEndsAt` + grace
-- [ ] 4.4 `buzzDuplicate` → `FAST_MONEY_DUPLICATE` private message, clears player 2's answer; host console shows P1 vs P2 side by side with `likelyDuplicate` hint
-- [ ] 4.5 `revealFastMoneyAnswer` (host picks matched board answer or "not on board"), running total, `finishGame`; win at `fastMoneyTarget`
-- [ ] 4.6 Host console Fast Money UI: pick players, Start/End turn, live answers, Buzz duplicate, reveal controls with `suggestMatch` preselected
-- [ ] 4.7 Player Fast Money UI: one question at a time with Submit / Skip, big countdown, "look away" screen for the waiting player, duplicate buzz toast that reopens the question
-- [ ] 4.8 Display Fast Money UI: 5-row board, server-synced countdown (`serverTime` skew correction), reveal animation, total, WIN celebration
+### Milestone 4 — Fast Money ✅
+- [x] 4.1 `core/fastMoney.ts`: `emptyResponses`, `buildQueue` (skips come back in skip order), `skipQuestion`, `answerQuestion`, `clearAnswer`, `normalizeAnswer`, `isDuplicate`, `suggestMatch`, `totalPoints`, `isWithinDeadline` + vitest
+- [x] 4.2 `selectFastMoneyPlayers` (leading team preselected, host override), `startFastMoneyTurn` (sets `timerEndsAt` from config), `endFastMoneyTurn`
+- [x] 4.3 `fastMoneyView` query (only the active slot's player receives questions) and player mutations `submitFastMoneyAnswer` / `skipFastMoneyQuestion` validated against `timerEndsAt` + grace
+- [x] 4.4 `buzzDuplicate` → `FAST_MONEY_DUPLICATE` private message, clears player 2's answer; host console shows P1 vs P2 side by side with `likelyDuplicate` hint
+- [x] 4.5 `revealFastMoneyAnswer` (host picks matched board answer or "not on board"), running total, `finishGame`; win at `fastMoneyTarget`
+- [x] 4.6 Host console Fast Money UI: pick players, Start/End turn, live answers, Buzz duplicate, reveal controls with `suggestMatch` preselected
+- [x] 4.7 Player Fast Money UI: one question at a time with Submit / Skip, big countdown, "look away" screen for the waiting player, duplicate buzz toast that reopens the question
+- [x] 4.8 Display Fast Money UI: 5-row board, server-synced countdown (`serverTime` skew correction), reveal animation, total, WIN celebration
 
 ### Milestone 5 — Polish & ops
 - [ ] 5.1 Design pass on all screens (Family Feud palette, board tile animations, responsive typography); test on a phone + TV

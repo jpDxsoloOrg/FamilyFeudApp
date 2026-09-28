@@ -53,4 +53,8 @@ npx sst deploy         # deploy
   server-side arbitration, the survey board with reveals, strikes, steals and pot multipliers,
   a private per-player channel (you're up / buzz result / removed), keyboard shortcuts on the
   host console, and synthesised sound effects with a mute toggle.
-- Milestone 4 (Fast Money) is next.
+- Milestone 4 (Fast Money) is done: pick two players from the leading team, server-timed
+  turns with a skew-corrected countdown, questions delivered only to the answering phone with
+  skip-to-back, duplicate buzz, host-matched reveals with a running total and a win at the
+  target, then finish.
+- Milestone 5 (polish and ops) is next.
