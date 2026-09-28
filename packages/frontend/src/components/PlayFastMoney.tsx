@@ -115,7 +115,11 @@ export function PlayFastMoney({ gameId, game, me, clockOffset, lastEvent, lastMe
   if (mySlot !== 0 && answeringSlot !== 0 && !myTurn) {
     return (
       <div className="fm__lookaway">
-        <h2>🙈 Look away!</h2>
+        <div className="fm__eyes" aria-hidden="true">
+          <span />
+          <span />
+        </div>
+        <h2>Look away!</h2>
         <p className="muted">{names[answeringSlot - 1]} is answering. No peeking — you're up next.</p>
       </div>
     );

@@ -80,8 +80,11 @@ export function Join() {
 
   return (
     <main className="page page--narrow join">
-      <h1 className="join__title">Family Feud</h1>
-      <p className="muted">Survey says… grab your phone and join the game.</p>
+      <div className="logo" aria-label="Family Feud">
+        <span className="logo__word">Family</span>
+        <span className="logo__word">Feud</span>
+      </div>
+      <p className="muted join__tagline">Survey says… grab your phone and join the game.</p>
 
       {returning && (
         <p className="muted">
