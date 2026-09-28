@@ -36,6 +36,7 @@ import {
   startRound,
   strike,
   toApiError,
+  undoRoundAction,
 } from "../lib/api";
 import type { ApiGame, ApiGameUpdate } from "../lib/types";
 
@@ -145,6 +146,7 @@ export function Host() {
             choosePassOrPlay: () => undefined,
             skipGuesser: () => undefined,
             endRound: () => undefined,
+            undo: () => undefined,
           }}
         />
       )}
@@ -183,6 +185,7 @@ export function Host() {
             choosePassOrPlay: (playingTeamId) => run(() => choosePassOrPlay(id, token, playingTeamId)),
             skipGuesser: () => run(() => skipGuesser(id, token)),
             endRound: () => run(() => endRound(id, token)),
+            undo: () => run(() => undoRoundAction(id, token)),
           }}
         />
       ) : (

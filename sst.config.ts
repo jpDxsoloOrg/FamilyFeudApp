@@ -93,6 +93,7 @@ export default $config({
       "choosePassOrPlay",
       "skipGuesser",
       "endRound",
+      "undoRoundAction",
       "buzz",
       "selectFastMoneyPlayers",
       "startFastMoneyTurn",

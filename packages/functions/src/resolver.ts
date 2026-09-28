@@ -33,6 +33,7 @@ const handlers: Record<string, Handler> = {
   choosePassOrPlay: h.choosePassOrPlay,
   skipGuesser: h.skipGuesser,
   endRound: h.endRound,
+  undoRoundAction: h.undoRoundAction,
   buzz: h.buzz,
   // fast money
   selectFastMoneyPlayers: h.selectFastMoneyPlayers,
