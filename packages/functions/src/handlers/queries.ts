@@ -17,7 +17,3 @@ export async function hostGame(args: Args): Promise<HostGameView> {
   const hostToken = requiredString(args, "hostToken");
   return toHostGame(await requireHost(gameId, hostToken));
 }
-
-export async function fastMoneyView(_args: Args): Promise<unknown> {
-  throw new Error("Not implemented: fastMoneyView (Task 4.3)");
-}
