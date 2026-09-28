@@ -200,11 +200,6 @@ type CreateGamePayload {
   hostToken: String!
 }
 
-type JoinGamePayload {
-  game: Game!
-  player: Player!
-}
-
 "Coarse-grained public update fanned out to onGameUpdated subscribers."
 type GameUpdate {
   gameId: ID!
@@ -236,7 +231,8 @@ type Query {
 type Mutation {
   # ---- Lobby & roster ----
   createGame(config: GameConfigInput): CreateGamePayload!
-  joinGame(joinCode: String!, playerId: ID!, displayName: String!): JoinGamePayload!
+  "Returns a GameUpdate (not a dedicated payload) so the join fans out to onGameUpdated; the joiner finds itself in game.players by its own playerId."
+  joinGame(joinCode: String!, playerId: ID!, displayName: String!): GameUpdate!
   updateConfig(gameId: ID!, hostToken: String!, config: GameConfigInput!): GameUpdate!
   randomizeTeams(gameId: ID!, hostToken: String!): GameUpdate!
   setTeamName(gameId: ID!, hostToken: String!, teamId: ID!, name: String!): GameUpdate!
@@ -294,6 +290,7 @@ type Subscription {
   onGameUpdated(gameId: ID!): GameUpdate
     @aws_subscribe(
       mutations: [
+        "joinGame"
         "updateConfig"
         "randomizeTeams"
         "setTeamName"

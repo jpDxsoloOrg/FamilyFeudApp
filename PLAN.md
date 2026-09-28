@@ -152,7 +152,7 @@ Cognito can be added later as a second AppSync auth mode without restructuring.
 |-------------|---------------------------|------------|
 | `GAME#<id>` | `META`                    | status, hostTokenHash, joinCode, config, currentRound, fastMoneyTeamId, fastMoneyPlayerIds[2], fastMoneyStage, timerEndsAt, createdAt |
 | `GAME#<id>` | `PLAYER#<playerId>`       | displayName, teamId (null = unassigned), order (position within team), active |
-| `GAME#<id>` | `TEAM#<teamId>`           | name, score, nextContestantCursor |
+| `GAME#<id>` | `TEAM#<teamId>`           | name, order, score, nextContestantCursor |
 | `GAME#<id>` | `SURVEY#<n>`              | text, answers[{ text, points }] (sorted desc), used |
 | `GAME#<id>` | `ROUND#<n>`               | surveyNumber, multiplier, state, contestants{teamId→playerId}, buzzWinnerPlayerId, faceOffWinnerTeamId, playingTeamId, currentGuesserPlayerId, strikes, pot, revealed[bool], awardedTo |
 | `GAME#<id>` | `FMQ#<n>`                 | text, answers[{ text, points }] |
@@ -164,7 +164,10 @@ All reads are `Query pk = GAME#<id>` with `begins_with(sk, ...)`; no GSIs.
 ## GraphQL schema outline (see `graphql/schema.graphql`)
 
 - **Lobby/roster mutations:** `createGame`, `joinGame`, `randomizeTeams`, `setTeamName`,
-  `assignPlayer`, `reorderPlayer`, `removePlayer`, `restorePlayer`, `updateConfig`
+  `assignPlayer`, `reorderPlayer`, `removePlayer`, `restorePlayer`, `updateConfig`.
+  `joinGame` returns a `GameUpdate` (not its own payload): AppSync only fans out a
+  mutation's own return type, and the lobby has to see players arrive. The joiner finds
+  its seat in `game.players` by its own `playerId`.
 - **Authoring:** `upsertSurvey`, `deleteSurvey`, `upsertFastMoneyQuestion`
 - **Round mutations (host):** `startRound`, `skipContestant`, `armBuzzers`, `resetBuzzers`,
   `revealAnswer`, `strike`, `setFaceOffWinner`, `choosePassOrPlay`, `skipGuesser`, `endRound`
@@ -200,16 +203,16 @@ code reference these task numbers in their `Not implemented` errors.
 - [x] 1.4 Stubbed core modules (`rotation`, `round`, `fastMoney`, `publicView`), resolver + handler stubs
 - [x] 1.5 Routed placeholder screens and shared `SurveyBoard` component with mobile-first CSS
 
-### Milestone 2 — Lobby, roster & authoring
-- [ ] 2.1 `functions/lib`: DynamoDB document client, `keys` helpers (done), `hashHostToken` / `requireHost`, `serverTime`, and a `loadGame(gameId)` that reads every `GAME#<id>` item into one in-memory `FullGame` object
-- [ ] 2.2 `createGame` / `joinGame` (join-code lookup, duplicate-name handling, `JOIN#<code>` record), `updateConfig`, `randomizeTeams` (2 teams, `TEAMS_SET`), `setTeamName`; `game` public query
-- [ ] 2.3 `core/rotation.ts`: `activeRoster`, `nextContestant`, `guesserOrderAfter`, `assignToTeam`, `reorderWithinTeam` + vitest coverage (wrap-around, inactive skipping, contestant-goes-last)
-- [ ] 2.4 `hostGame` query (full surveys, full board, Fast Money answers) gated by `requireHost`
-- [ ] 2.5 Roster mutations: `assignPlayer` (late joiners appended to bottom), `reorderPlayer`, `removePlayer`, `restorePlayer`; joining after `TEAMS_SET` lands in the unassigned bucket
-- [ ] 2.6 Authoring mutations: `upsertSurvey` (answers sorted desc, validate ≤ 8 answers), `deleteSurvey`, `upsertFastMoneyQuestion`
-- [ ] 2.7 Frontend `lib/api.ts`: fetch-based `gql`, AppSync realtime websocket subscription helper (`subscribe(query, vars, onData)`), `useGame(gameId)` hook driven by `onGameUpdated`; Join screen (join / host) with localStorage identity
-- [ ] 2.8 Host Setup screen: config form, survey editor (question + up to 8 answers with points), Fast Money question editor
-- [ ] 2.9 Lobby views: Display shows join code + players arriving live; Host shows Randomize, rename teams, drag/reorder roster, assign unassigned, remove/restore
+### Milestone 2 — Lobby, roster & authoring ✅
+- [x] 2.1 `functions/lib`: DynamoDB document client, `keys` helpers (done), `hashHostToken` / `requireHost`, `serverTime`, and a `loadGame(gameId)` that reads every `GAME#<id>` item into one in-memory `FullGame` object
+- [x] 2.2 `createGame` / `joinGame` (join-code lookup, duplicate-name handling, `JOIN#<code>` record), `updateConfig`, `randomizeTeams` (2 teams, `TEAMS_SET`), `setTeamName`; `game` public query
+- [x] 2.3 `core/rotation.ts`: `activeRoster`, `nextContestant`, `guesserOrderAfter`, `assignToTeam`, `reorderWithinTeam` + vitest coverage (wrap-around, inactive skipping, contestant-goes-last)
+- [x] 2.4 `hostGame` query (full surveys, full board, Fast Money answers) gated by `requireHost`
+- [x] 2.5 Roster mutations: `assignPlayer` (late joiners appended to bottom), `reorderPlayer`, `removePlayer`, `restorePlayer`; joining after `TEAMS_SET` lands in the unassigned bucket
+- [x] 2.6 Authoring mutations: `upsertSurvey` (answers sorted desc, validate ≤ 8 answers), `deleteSurvey`, `upsertFastMoneyQuestion`
+- [x] 2.7 Frontend `lib/api.ts`: fetch-based `gql`, AppSync realtime websocket subscription helper (`subscribe(query, vars, onData)`), `useGame(gameId)` hook driven by `onGameUpdated`; Join screen (join / host) with localStorage identity
+- [x] 2.8 Host Setup screen: config form, survey editor (question + up to 8 answers with points), Fast Money question editor
+- [x] 2.9 Lobby views: Display shows join code + players arriving live; Host shows Randomize, rename teams, drag/reorder roster, assign unassigned, remove/restore
 
 ### Milestone 3 — Round loop
 - [ ] 3.1 `core/round.ts`: `makeBoard`, `createRound`, `currentGuesser`, `roundReducer` for the full state table (arm → buzz → face-off reveal/strike → winner → pass/play → playing with strikes → steal → award → reveal remaining → end) + exhaustive vitest (illegal transitions throw, pot math with multipliers, three-strike steal both outcomes, all-answers-revealed awards immediately)

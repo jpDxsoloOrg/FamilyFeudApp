@@ -14,7 +14,9 @@ See [PLAN.md](./PLAN.md) for the full product and architecture plan.
 
 - `packages/core` — pure domain logic + types: team split, turn rotation, round state machine,
   Fast Money queue/scoring, public-view stripping. Unit tested with vitest.
-- `packages/functions` — Lambda resolver + handler stubs for the AppSync API
+- `packages/functions` — Lambda resolver + handlers for the AppSync API (`src/lib` holds the
+  DynamoDB client, host auth, `loadGame` and the public/host view builders; handler tests run
+  against an in-memory DynamoDB fake in `src/testSupport`)
 - `packages/frontend` — Vite React SPA: Join, Host console, Display, Player
 - `graphql/schema.graphql` — GraphQL schema
 - `sst.config.ts` — SST v3 infrastructure definition
@@ -23,9 +25,9 @@ See [PLAN.md](./PLAN.md) for the full product and architecture plan.
 
 ```sh
 npm install            # install all workspaces
-npm test               # run core unit tests (vitest)
+npm test               # run core + functions unit tests (vitest)
 npm run typecheck      # typecheck all workspaces
-npm run dev            # run the frontend locally (mock/no API yet)
+npm run dev            # run the frontend locally (needs packages/frontend/.env.local, see .env.example)
 npm run build          # build the frontend
 npx sst dev            # live-develop against AWS (requires AWS credentials)
 npx sst deploy         # deploy
@@ -35,8 +37,16 @@ npx sst deploy         # deploy
 
 | Route | Purpose |
 |-------|---------|
-| `/` | Join a game or host a new one |
+| `/` | Join a game with a code + name, or host a new one (host token is stored in localStorage) |
 | `/host/:gameId` | Host console (needs the host token saved at creation) |
-| `/host/:gameId/setup` | Config + survey / Fast Money question authoring |
+| `/host/:gameId/setup` | Settings (rounds, multipliers, strikes, Fast Money timers/target) + survey / Fast Money question authoring |
 | `/display/:gameId` | Big-screen board for the TV |
 | `/play/:gameId` | Player view: same board + buzzer / Fast Money controls |
+
+## Status
+
+- Milestone 1 (skeleton) and Milestone 2 (lobby, roster, authoring) are done: create/join a
+  game, randomize two ordered teams, rename teams, slot in late joiners, reorder / remove /
+  restore players, and author survey + Fast Money questions, all live over AppSync
+  subscriptions. See the task list in [PLAN.md](./PLAN.md).
+- Milestone 3 (the round loop: face-offs, buzzers, board, strikes, steals) is next.
