@@ -1,12 +1,35 @@
 // Task 3.2 — strip hidden data for the broadcast payload. See PLAN.md.
-import type { BoardAnswer, FastMoneyResponse, PublicBoardAnswer, PublicRound, RoundData } from "./types.js";
+import { currentGuesser } from "./round.js";
+import type { BoardAnswer, FastMoneyResponse, PublicBoardAnswer, PublicRound, RoundData, RoundState } from "./types.js";
 
-export function toPublicBoard(_board: readonly BoardAnswer[]): PublicBoardAnswer[] {
-  throw new Error("Not implemented: toPublicBoard (Task 3.2)");
+/** Unrevealed slots carry only their index: no text, no points. */
+export function toPublicBoard(board: readonly BoardAnswer[]): PublicBoardAnswer[] {
+  return board.map((slot) =>
+    slot.revealed
+      ? { index: slot.index, text: slot.text, points: slot.points, revealed: true }
+      : { index: slot.index, text: null, points: null, revealed: false },
+  );
 }
 
-export function toPublicRound(_round: RoundData): PublicRound {
-  throw new Error("Not implemented: toPublicRound (Task 3.2)");
+/** The question is read aloud only once the buzzers are armed; before that it stays hidden. */
+const QUESTION_HIDDEN_STATES: ReadonlySet<RoundState> = new Set(["PICK_CONTESTANTS"]);
+
+export function toPublicRound(round: RoundData): PublicRound {
+  return {
+    number: round.number,
+    multiplier: round.multiplier,
+    state: round.state,
+    questionText: QUESTION_HIDDEN_STATES.has(round.state) ? null : round.questionText,
+    board: toPublicBoard(round.board),
+    contestantPlayerIds: Object.values(round.contestants),
+    buzzWinnerPlayerId: round.buzzWinnerPlayerId,
+    faceOffWinnerTeamId: round.faceOffWinnerTeamId,
+    playingTeamId: round.playingTeamId,
+    currentGuesserPlayerId: currentGuesser(round),
+    strikes: round.strikes,
+    pot: round.pot,
+    awardedToTeamId: round.awardedToTeamId,
+  };
 }
 
 export interface PublicFastMoneyRow {
@@ -18,6 +41,14 @@ export interface PublicFastMoneyRow {
   skipped: boolean;
 }
 
-export function toPublicFastMoneyRows(_responses: readonly FastMoneyResponse[]): PublicFastMoneyRow[] {
-  throw new Error("Not implemented: toPublicFastMoneyRows (Task 3.2)");
+/** Answers and points are hidden until the host reveals that row. */
+export function toPublicFastMoneyRows(responses: readonly FastMoneyResponse[]): PublicFastMoneyRow[] {
+  return responses.map((response) => ({
+    slot: response.slot,
+    questionIndex: response.questionIndex,
+    answer: response.revealed ? response.answer : null,
+    points: response.revealed ? response.points : null,
+    revealed: response.revealed,
+    skipped: response.skipped,
+  }));
 }
