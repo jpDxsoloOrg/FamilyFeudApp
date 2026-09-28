@@ -1,17 +1,31 @@
 // Task 2.9 — host console: lobby & roster management. Round / Fast Money UIs come in 3.6 / 4.6.
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { HostRound } from "../components/HostRound";
+import { MuteToggle } from "../components/MuteToggle";
 import { RealtimeBadge } from "../components/RealtimeBadge";
 import { Roster } from "../components/Roster";
 import { TeamRename } from "../components/TeamRename";
 import { useHostGame } from "../hooks/useHostGame";
+import { useJustRevealed } from "../hooks/useJustRevealed";
+import { useSounds } from "../hooks/useSounds";
 import {
+  armBuzzers,
   assignPlayer,
+  choosePassOrPlay,
+  endRound,
   randomizeTeams,
   removePlayer,
   reorderPlayer,
+  resetBuzzers,
   restorePlayer,
+  revealAnswer,
+  setFaceOffWinner,
   setTeamName,
+  skipContestant,
+  skipGuesser,
+  startRound,
+  strike,
   toApiError,
 } from "../lib/api";
 import type { ApiGame, ApiGameUpdate } from "../lib/types";
@@ -24,7 +38,9 @@ function displayUrl(gameId: string): string {
 
 export function Host() {
   const { gameId } = useParams<{ gameId: string }>();
-  const { game, host, hostToken, isHost, realtime, loading, error, applyUpdate } = useHostGame(gameId);
+  const { game, host, hostToken, isHost, realtime, loading, error, lastEvent, applyUpdate, refreshHost } = useHostGame(gameId);
+  const { muted, toggleMuted } = useSounds(lastEvent);
+  const justRevealed = useJustRevealed(game?.currentRound);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string>();
   const [copied, setCopied] = useState(false);
@@ -90,11 +106,37 @@ export function Host() {
           <button className="button button--small button--ghost" type="button" onClick={copyDisplayLink}>
             {copied ? "Copied" : "Copy display link"}
           </button>
+          <MuteToggle muted={muted} onToggle={toggleMuted} />
           <RealtimeBadge status={realtime} />
         </nav>
       </header>
 
       {problem && <p className="field-error">{problem}</p>}
+
+      {game.status === "TEAMS_SET" && (
+        <HostRound
+          gameId={id}
+          game={game}
+          surveys={host?.surveys ?? []}
+          fullBoard={[]}
+          busy={busy}
+          lastEventKey={null}
+          lastEventName={undefined}
+          justRevealed={null}
+          actions={{
+            startRound: (surveyNumber) => run(() => startRound(id, token, surveyNumber)).then(refreshHost),
+            skipContestant: () => undefined,
+            armBuzzers: () => undefined,
+            resetBuzzers: () => undefined,
+            revealAnswer: () => undefined,
+            strike: () => undefined,
+            setFaceOffWinner: () => undefined,
+            choosePassOrPlay: () => undefined,
+            skipGuesser: () => undefined,
+            endRound: () => undefined,
+          }}
+        />
+      )}
 
       {LOBBY_STATUSES.has(game.status) ? (
         <Lobby
@@ -108,10 +150,33 @@ export function Host() {
           onRemove={(playerId) => run(() => removePlayer(id, token, playerId))}
           onRestore={(playerId) => run(() => restorePlayer(id, token, playerId))}
         />
+      ) : game.status === "ROUND_ACTIVE" ? (
+        <HostRound
+          gameId={id}
+          game={game}
+          surveys={host?.surveys ?? []}
+          fullBoard={host?.currentBoard ?? []}
+          busy={busy}
+          lastEventKey={lastEvent?.serverTime ?? null}
+          lastEventName={lastEvent?.event}
+          justRevealed={justRevealed}
+          actions={{
+            startRound: (surveyNumber) => run(() => startRound(id, token, surveyNumber)).then(refreshHost),
+            skipContestant: (teamId) => run(() => skipContestant(id, token, teamId)),
+            armBuzzers: () => run(() => armBuzzers(id, token)),
+            resetBuzzers: () => run(() => resetBuzzers(id, token)),
+            revealAnswer: (index) => run(() => revealAnswer(id, token, index)),
+            strike: () => run(() => strike(id, token)),
+            setFaceOffWinner: (teamId) => run(() => setFaceOffWinner(id, token, teamId)),
+            choosePassOrPlay: (playingTeamId) => run(() => choosePassOrPlay(id, token, playingTeamId)),
+            skipGuesser: () => run(() => skipGuesser(id, token)),
+            endRound: () => run(() => endRound(id, token)),
+          }}
+        />
       ) : (
         <section className="card">
           <h2>{game.status.replace("_", " ")}</h2>
-          <p className="muted">Round and Fast Money controls arrive in Milestone 3 / 4.</p>
+          <p className="muted">Fast Money controls arrive in Milestone 4.</p>
         </section>
       )}
     </main>
@@ -156,7 +221,7 @@ function Lobby({ game, busy, surveysReady, onRandomize, onRename, onAssign, onRe
           </div>
         </div>
         {teamsSet && unassigned.length === 0 && (
-          <p className="muted small">Teams are set. Start round 1 from here once the round console lands (Task 3.6).</p>
+          <p className="muted small">Teams are set. Start round 1 below when everyone is ready.</p>
         )}
       </section>
 
