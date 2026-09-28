@@ -1,6 +1,7 @@
 // Task 2.9 — host console: lobby & roster management. Round / Fast Money UIs come in 3.6 / 4.6.
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { HostFastMoney } from "../components/HostFastMoney";
 import { HostRound } from "../components/HostRound";
 import { MuteToggle } from "../components/MuteToggle";
 import { RealtimeBadge } from "../components/RealtimeBadge";
@@ -12,18 +13,24 @@ import { useSounds } from "../hooks/useSounds";
 import {
   armBuzzers,
   assignPlayer,
+  buzzDuplicate,
   choosePassOrPlay,
+  endFastMoneyTurn,
   endRound,
+  finishGame,
   randomizeTeams,
   removePlayer,
   reorderPlayer,
   resetBuzzers,
   restorePlayer,
   revealAnswer,
+  revealFastMoneyAnswer,
+  selectFastMoneyPlayers,
   setFaceOffWinner,
   setTeamName,
   skipContestant,
   skipGuesser,
+  startFastMoneyTurn,
   startRound,
   strike,
   toApiError,
@@ -38,7 +45,7 @@ function displayUrl(gameId: string): string {
 
 export function Host() {
   const { gameId } = useParams<{ gameId: string }>();
-  const { game, host, hostToken, isHost, realtime, loading, error, lastEvent, applyUpdate, refreshHost } = useHostGame(gameId);
+  const { game, host, hostToken, isHost, realtime, loading, error, lastEvent, clockOffset, applyUpdate, refreshHost } = useHostGame(gameId);
   const { muted, toggleMuted } = useSounds(lastEvent);
   const justRevealed = useJustRevealed(game?.currentRound);
   const [busy, setBusy] = useState(false);
@@ -176,10 +183,33 @@ export function Host() {
           }}
         />
       ) : (
-        <section className="card">
-          <h2>{game.status.replace("_", " ")}</h2>
-          <p className="muted">Fast Money controls arrive in Milestone 4.</p>
-        </section>
+        <HostFastMoney
+          game={game}
+          questions={host?.fastMoneyQuestions ?? []}
+          answers={host?.fastMoneyAnswers ?? []}
+          clockOffset={clockOffset}
+          busy={busy}
+          onPoll={refreshHost}
+          actions={{
+            selectPlayers: (teamId, playerIds) => run(() => selectFastMoneyPlayers(id, token, teamId, playerIds)),
+            startTurn: (slot) => run(() => startFastMoneyTurn(id, token, slot)),
+            endTurn: () => run(() => endFastMoneyTurn(id, token)).then(refreshHost),
+            buzzDuplicate: async (questionIndex) => {
+              setBusy(true);
+              setProblem(undefined);
+              try {
+                await buzzDuplicate(id, token, questionIndex);
+                refreshHost();
+              } catch (cause) {
+                setProblem(toApiError(cause).message);
+              } finally {
+                setBusy(false);
+              }
+            },
+            reveal: (slot, questionIndex, matchedIndex) => run(() => revealFastMoneyAnswer(id, token, slot, questionIndex, matchedIndex)).then(refreshHost),
+            finish: () => run(() => finishGame(id, token)),
+          }}
+        />
       )}
     </main>
   );
