@@ -1,9 +1,11 @@
 // Task 2.7 — fetch-based GraphQL client plus every operation the app sends.
 import { apiConfig } from "./config";
 import type {
+  ApiFastMoneyView,
   ApiGame,
   ApiGameUpdate,
   ApiHostGame,
+  ApiPlayerMessage,
   FastMoneyQuestion,
   GameConfigInput,
   Survey,
@@ -276,6 +278,68 @@ export async function buzz(gameId: string, playerId: string): Promise<ApiGameUpd
     { gameId, playerId },
   );
   return data.buzz;
+}
+
+/* ---------- fast money ---------- */
+
+const FM_VIEW_FIELDS = "slot timerEndsAt serverTime answered total queue { questionIndex text }";
+
+export async function fetchFastMoneyView(gameId: string, playerId: string): Promise<ApiFastMoneyView | null> {
+  const data = await gql<{ fastMoneyView: ApiFastMoneyView | null }>(
+    `query FastMoneyView($gameId: ID!, $playerId: ID!) { fastMoneyView(gameId: $gameId, playerId: $playerId) { ${FM_VIEW_FIELDS} } }`,
+    { gameId, playerId },
+  );
+  return data.fastMoneyView;
+}
+
+export function selectFastMoneyPlayers(gameId: string, hostToken: string, teamId: string, playerIds: string[]): Promise<ApiGameUpdate> {
+  return hostMutation("selectFastMoneyPlayers", ", $teamId: ID!, $playerIds: [ID!]!", ", teamId: $teamId, playerIds: $playerIds", { gameId, hostToken, teamId, playerIds });
+}
+
+export function startFastMoneyTurn(gameId: string, hostToken: string, slot: number): Promise<ApiGameUpdate> {
+  return hostMutation("startFastMoneyTurn", ", $slot: Int!", ", slot: $slot", { gameId, hostToken, slot });
+}
+
+export function endFastMoneyTurn(gameId: string, hostToken: string): Promise<ApiGameUpdate> {
+  return hostMutation("endFastMoneyTurn", "", "", { gameId, hostToken });
+}
+
+export function revealFastMoneyAnswer(gameId: string, hostToken: string, slot: number, questionIndex: number, matchedIndex: number | null): Promise<ApiGameUpdate> {
+  return hostMutation("revealFastMoneyAnswer", ", $slot: Int!, $questionIndex: Int!, $matchedIndex: Int", ", slot: $slot, questionIndex: $questionIndex, matchedIndex: $matchedIndex", { gameId, hostToken, slot, questionIndex, matchedIndex });
+}
+
+export function finishGame(gameId: string, hostToken: string): Promise<ApiGameUpdate> {
+  return hostMutation("finishGame", "", "", { gameId, hostToken });
+}
+
+export async function buzzDuplicate(gameId: string, hostToken: string, questionIndex: number): Promise<ApiPlayerMessage> {
+  const data = await gql<{ buzzDuplicate: ApiPlayerMessage }>(
+    `mutation BuzzDuplicate($gameId: ID!, $hostToken: String!, $questionIndex: Int!) {
+      buzzDuplicate(gameId: $gameId, hostToken: $hostToken, questionIndex: $questionIndex) { gameId playerId type detail serverTime }
+    }`,
+    { gameId, hostToken, questionIndex },
+  );
+  return data.buzzDuplicate;
+}
+
+export async function submitFastMoneyAnswer(gameId: string, playerId: string, questionIndex: number, answer: string): Promise<ApiFastMoneyView> {
+  const data = await gql<{ submitFastMoneyAnswer: ApiFastMoneyView }>(
+    `mutation SubmitFastMoneyAnswer($gameId: ID!, $playerId: ID!, $questionIndex: Int!, $answer: String!) {
+      submitFastMoneyAnswer(gameId: $gameId, playerId: $playerId, questionIndex: $questionIndex, answer: $answer) { ${FM_VIEW_FIELDS} }
+    }`,
+    { gameId, playerId, questionIndex, answer },
+  );
+  return data.submitFastMoneyAnswer;
+}
+
+export async function skipFastMoneyQuestion(gameId: string, playerId: string, questionIndex: number): Promise<ApiFastMoneyView> {
+  const data = await gql<{ skipFastMoneyQuestion: ApiFastMoneyView }>(
+    `mutation SkipFastMoneyQuestion($gameId: ID!, $playerId: ID!, $questionIndex: Int!) {
+      skipFastMoneyQuestion(gameId: $gameId, playerId: $playerId, questionIndex: $questionIndex) { ${FM_VIEW_FIELDS} }
+    }`,
+    { gameId, playerId, questionIndex },
+  );
+  return data.skipFastMoneyQuestion;
 }
 
 /* ---------- authoring ---------- */
