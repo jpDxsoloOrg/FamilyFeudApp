@@ -7,7 +7,14 @@ import { QuestionEditor, type QuestionDraft } from "../components/QuestionEditor
 import { QuestionBankTools } from "../components/QuestionBankTools";
 import { RealtimeBadge } from "../components/RealtimeBadge";
 import { useHostGame } from "../hooks/useHostGame";
-import { deleteSurvey, toApiError, updateConfig, upsertFastMoneyQuestion, upsertSurvey } from "../lib/api";
+import {
+  deleteFastMoneyQuestion,
+  deleteSurvey,
+  toApiError,
+  updateConfig,
+  upsertFastMoneyQuestion,
+  upsertSurvey,
+} from "../lib/api";
 import type { FastMoneyQuestion, GameConfig, Survey } from "../lib/types";
 
 type ConfigDraft = Record<Exclude<keyof GameConfig, "roundMultipliers">, string> & { roundMultipliers: string[] };
@@ -179,6 +186,7 @@ function QuestionList<T extends { number: number; text: string; answers: { text:
   onDelete,
 }: QuestionListProps<T>) {
   const [editing, setEditing] = useState<QuestionDraft | null>(null);
+  const [confirming, setConfirming] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -197,12 +205,15 @@ function QuestionList<T extends { number: number; text: string; answers: { text:
     }
   }
 
+  // In-page confirmation instead of window.confirm: some browsers (Arc, embedded
+  // webviews) suppress native dialogs, which made Delete silently do nothing.
   async function remove(item: T): Promise<void> {
-    if (!onDelete || !window.confirm(`Delete #${item.number} "${item.text}"?`)) return;
+    if (!onDelete) return;
     setBusy(true);
     setError(undefined);
     try {
       await onDelete(item);
+      setConfirming(null);
     } catch (cause) {
       setError(toApiError(cause).message);
     } finally {
@@ -237,15 +248,31 @@ function QuestionList<T extends { number: number; text: string; answers: { text:
               >
                 Edit
               </button>
-              {onDelete && (
+              {onDelete && confirming !== item.number && (
                 <button
                   className="button button--small button--danger"
                   type="button"
                   disabled={busy || !canDelete(item)}
-                  onClick={() => remove(item)}
+                  onClick={() => setConfirming(item.number)}
                 >
                   Delete
                 </button>
+              )}
+              {onDelete && confirming === item.number && (
+                <>
+                  <button
+                    className="button button--small button--danger"
+                    type="button"
+                    disabled={busy}
+                    aria-label={`Confirm delete #${item.number}`}
+                    onClick={() => remove(item)}
+                  >
+                    {busy ? "Deleting…" : "Confirm delete"}
+                  </button>
+                  <button className="button button--small button--ghost" type="button" disabled={busy} onClick={() => setConfirming(null)}>
+                    Cancel
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -386,7 +413,8 @@ export function HostSetup() {
         items={fastMoneyQuestions}
         editorTitle="Fast Money question"
         canEdit={() => game.status !== "FAST_MONEY" && game.status !== "FINISHED"}
-        canDelete={() => false}
+        canDelete={() => game.status !== "FAST_MONEY" && game.status !== "FINISHED"}
+        lockedTag={() => (game.status === "FAST_MONEY" || game.status === "FINISHED" ? "locked" : undefined)}
         onSave={async (draft) => {
           const saved = await upsertFastMoneyQuestion(gameId, hostToken, draft.number, draft.text, draft.answers);
           patchHost((current) => ({
@@ -394,6 +422,13 @@ export function HostSetup() {
             fastMoneyQuestions: [...current.fastMoneyQuestions.filter((q) => q.number !== saved.number), saved].sort(
               (a, b) => a.number - b.number,
             ),
+          }));
+        }}
+        onDelete={async (question) => {
+          await deleteFastMoneyQuestion(gameId, hostToken, question.number);
+          patchHost((current) => ({
+            ...current,
+            fastMoneyQuestions: current.fastMoneyQuestions.filter((q) => q.number !== question.number),
           }));
         }}
       />

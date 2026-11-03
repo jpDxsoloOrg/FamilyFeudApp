@@ -389,3 +389,13 @@ export async function upsertFastMoneyQuestion(
   );
   return data.upsertFastMoneyQuestion;
 }
+
+export async function deleteFastMoneyQuestion(gameId: string, hostToken: string, number: number): Promise<boolean> {
+  const data = await gql<{ deleteFastMoneyQuestion: boolean }>(
+    `mutation DeleteFastMoneyQuestion($gameId: ID!, $hostToken: String!, $number: Int!) {
+      deleteFastMoneyQuestion(gameId: $gameId, hostToken: $hostToken, number: $number)
+    }`,
+    { gameId, hostToken, number },
+  );
+  return data.deleteFastMoneyQuestion;
+}

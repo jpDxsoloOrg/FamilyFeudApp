@@ -172,7 +172,7 @@ All reads are `Query pk = GAME#<id>` with `begins_with(sk, ...)`; no GSIs.
   `joinGame` returns a `GameUpdate` (not its own payload): AppSync only fans out a
   mutation's own return type, and the lobby has to see players arrive. The joiner finds
   its seat in `game.players` by its own `playerId`.
-- **Authoring:** `upsertSurvey`, `deleteSurvey`, `upsertFastMoneyQuestion`
+- **Authoring:** `upsertSurvey`, `deleteSurvey`, `upsertFastMoneyQuestion`, `deleteFastMoneyQuestion`
 - **Round mutations (host):** `startRound`, `skipContestant`, `armBuzzers`, `resetBuzzers`,
   `revealAnswer`, `strike`, `setFaceOffWinner`, `choosePassOrPlay`, `skipGuesser`, `endRound`
 - **Round mutations (player):** `buzz`

@@ -1,4 +1,4 @@
-// Task 2.6 — upsertSurvey, deleteSurvey, upsertFastMoneyQuestion.
+// Task 2.6 — upsertSurvey, deleteSurvey, upsertFastMoneyQuestion, deleteFastMoneyQuestion.
 import type { FastMoneyQuestion, Survey, SurveyAnswer } from "@familyfeud/core";
 import { requiredArray, requiredInt, requiredString, type Args } from "../lib/args.js";
 import { requireHost } from "../lib/auth.js";
@@ -92,4 +92,20 @@ export async function upsertFastMoneyQuestion(args: Args): Promise<FastMoneyQues
   const item: FastMoneyQuestionItem = { ...keys.fastMoneyQuestion(gameId, number), text, answers };
   await putItem(item);
   return { number, text, answers };
+}
+
+export async function deleteFastMoneyQuestion(args: Args): Promise<boolean> {
+  const gameId = requiredString(args, "gameId");
+  const hostToken = requiredString(args, "hostToken");
+  const number = requiredInt(args, "number", { min: 1, max: MAX_QUESTION_NUMBER });
+
+  const game = await requireHost(gameId, hostToken);
+  if (game.status === "FAST_MONEY" || game.status === "FINISHED") {
+    throw new ConflictError("Fast Money questions cannot be changed once Fast Money has started");
+  }
+  const existing = game.fastMoneyQuestions.find((question) => question.number === number);
+  if (!existing) throw new NotFoundError(`No Fast Money question ${number} in this game`);
+
+  await deleteItem(keys.fastMoneyQuestion(gameId, number));
+  return true;
 }

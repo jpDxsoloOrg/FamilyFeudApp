@@ -249,6 +249,7 @@ type Mutation {
   upsertSurvey(gameId: ID!, hostToken: String!, number: Int!, text: String!, answers: [SurveyAnswerInput!]!): Survey!
   deleteSurvey(gameId: ID!, hostToken: String!, number: Int!): Boolean!
   upsertFastMoneyQuestion(gameId: ID!, hostToken: String!, number: Int!, text: String!, answers: [SurveyAnswerInput!]!): FastMoneyQuestion!
+  deleteFastMoneyQuestion(gameId: ID!, hostToken: String!, number: Int!): Boolean!
 
   # ---- Round (host) ----
   "Begin round N with survey S. Auto-picks the next contestant from each team."

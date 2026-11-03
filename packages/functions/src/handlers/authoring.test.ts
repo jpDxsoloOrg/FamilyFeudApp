@@ -3,7 +3,7 @@ import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from ".
 import { keys } from "../lib/keys.js";
 import { installFakeDynamo, type FakeTable } from "../testSupport/fakeDynamo.js";
 import { GAME_ID, HOST_TOKEN, seedGame } from "../testSupport/fixtures.js";
-import { deleteSurvey, parseAnswers, upsertFastMoneyQuestion, upsertSurvey } from "./authoring.js";
+import { deleteFastMoneyQuestion, deleteSurvey, parseAnswers, upsertFastMoneyQuestion, upsertSurvey } from "./authoring.js";
 import { hostGame } from "./queries.js";
 
 let table: FakeTable;
@@ -98,5 +98,20 @@ describe("upsertFastMoneyQuestion", () => {
   it("is locked once Fast Money has started", async () => {
     seedGame(table, { meta: { status: "FAST_MONEY" } });
     await expect(upsertFastMoneyQuestion({ ...host, number: 1, text: "x", answers })).rejects.toThrow(ConflictError);
+  });
+});
+
+describe("deleteFastMoneyQuestion", () => {
+  it("deletes an existing question and 404s otherwise", async () => {
+    await upsertFastMoneyQuestion({ ...host, number: 2, text: "Q", answers });
+    await expect(deleteFastMoneyQuestion({ ...host, number: 2 })).resolves.toBe(true);
+    expect(table.get(`GAME#${GAME_ID}`, "FMQ#002")).toBeUndefined();
+    await expect(deleteFastMoneyQuestion({ ...host, number: 2 })).rejects.toThrow(NotFoundError);
+  });
+
+  it("is locked once Fast Money has started", async () => {
+    await upsertFastMoneyQuestion({ ...host, number: 1, text: "Q", answers });
+    seedGame(table, { meta: { status: "FAST_MONEY" } });
+    await expect(deleteFastMoneyQuestion({ ...host, number: 1 })).rejects.toThrow(ConflictError);
   });
 });
