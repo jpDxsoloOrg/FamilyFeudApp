@@ -22,6 +22,7 @@ const handlers: Record<string, Handler> = {
   upsertSurvey: h.upsertSurvey,
   deleteSurvey: h.deleteSurvey,
   upsertFastMoneyQuestion: h.upsertFastMoneyQuestion,
+  deleteFastMoneyQuestion: h.deleteFastMoneyQuestion,
   // round
   startRound: h.startRound,
   skipContestant: h.skipContestant,
