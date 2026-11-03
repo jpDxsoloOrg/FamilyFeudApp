@@ -20,6 +20,7 @@ import {
   endFastMoneyTurn,
   endRound,
   finishGame,
+  joinGame,
   randomizeTeams,
   removePlayer,
   reorderPlayer,
@@ -44,6 +45,14 @@ const LOBBY_STATUSES = new Set(["LOBBY", "TEAMS_SET"]);
 
 function displayUrl(gameId: string): string {
   return `${window.location.origin}/display/${gameId}`;
+}
+
+/** Ids for host-created test players. The prefix marks them in the roster. */
+export const TEST_PLAYER_PREFIX = "test-";
+
+function testPlayerId(): string {
+  const random = globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2);
+  return `${TEST_PLAYER_PREFIX}${random}`;
 }
 
 export function Host() {
@@ -85,6 +94,32 @@ export function Host() {
     setProblem(undefined);
     try {
       applyUpdate(await action());
+    } catch (cause) {
+      setProblem(toApiError(cause).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Seat a few stand-in players so teams, late joins and turn order can be
+   * tried from one device. They join like anyone else and never answer.
+   */
+  async function addTestPlayers(count: number): Promise<void> {
+    if (!game) return;
+    setBusy(true);
+    setProblem(undefined);
+    try {
+      const taken = new Set(game.players.map((player) => player.displayName.toLowerCase()));
+      let next = 1;
+      let last: ApiGameUpdate | undefined;
+      for (let added = 0; added < count; added += 1) {
+        while (taken.has(`test ${next}`)) next += 1;
+        const name = `Test ${next}`;
+        taken.add(name.toLowerCase());
+        last = await joinGame(game.joinCode, testPlayerId(), name);
+      }
+      if (last) applyUpdate(last);
     } catch (cause) {
       setProblem(toApiError(cause).message);
     } finally {
@@ -162,6 +197,7 @@ export function Host() {
           onReorder={(playerId, order) => run(() => reorderPlayer(id, token, playerId, order))}
           onRemove={(playerId) => run(() => removePlayer(id, token, playerId))}
           onRestore={(playerId) => run(() => restorePlayer(id, token, playerId))}
+          onAddTestPlayers={addTestPlayers}
         />
       ) : game.status === "ROUND_ACTIVE" ? (
         <HostRound
@@ -231,12 +267,15 @@ interface LobbyProps {
   onReorder: (playerId: string, newOrder: number) => void;
   onRemove: (playerId: string) => void;
   onRestore: (playerId: string) => void;
+  onAddTestPlayers: (count: number) => Promise<void>;
 }
 
-function Lobby({ game, busy, surveysReady, onRandomize, onRename, onAssign, onReorder, onRemove, onRestore }: LobbyProps) {
+function Lobby({ game, busy, surveysReady, onRandomize, onRename, onAssign, onReorder, onRemove, onRestore, onAddTestPlayers }: LobbyProps) {
   const teamsSet = game.teams.length > 0;
   const unassigned = game.players.filter((player) => player.teamId === null);
   const active = game.players.filter((player) => player.active);
+  const [testCount, setTestCount] = useState("4");
+  const testCountNumber = Math.min(20, Math.max(1, Number.parseInt(testCount, 10) || 0));
 
   return (
     <>
@@ -326,6 +365,30 @@ function Lobby({ game, busy, surveysReady, onRandomize, onRename, onAssign, onRe
           ))}
         </section>
       )}
+
+      <section className="card test-players">
+        <h3>Test players</h3>
+        <p className="muted small">
+          Add stand-in players to try teams, late joins and turn order from one device. They sit in the roster
+          like real players but never buzz or answer; use Skip in a round to move past them.
+        </p>
+        <div className="field field--row">
+          <input
+            className="input input--small input--count"
+            type="number"
+            min={1}
+            max={20}
+            inputMode="numeric"
+            aria-label="Number of test players"
+            value={testCount}
+            onChange={(event) => setTestCount(event.target.value)}
+            disabled={busy}
+          />
+          <button className="button button--small" type="button" disabled={busy || testCountNumber < 1} onClick={() => onAddTestPlayers(testCountNumber)}>
+            Add {testCountNumber} test {testCountNumber === 1 ? "player" : "players"}
+          </button>
+        </div>
+      </section>
     </>
   );
 }
