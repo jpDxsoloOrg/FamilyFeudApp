@@ -68,7 +68,8 @@ The console walks you through it; the display and phones follow automatically.
 ## Team chat
 
 Each team has a chat on their phones or computers for quick huddles during a face-off or steal. It is not
-shown on the TV, and the host has no view of it. Messages vanish after 20 minutes.
+shown on the TV. The **Team chats** section at the bottom of the host console shows both teams'
+chats side by side, read only, so you can follow along but not post. Messages vanish after 20 minutes.
 
 ## If something goes wrong
 

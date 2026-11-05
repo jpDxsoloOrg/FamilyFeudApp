@@ -294,6 +294,12 @@ select.input { appearance: auto; }
 .chat-strip__strikes { display: flex; gap: 2px; }
 .chat-strip .strikes__x { font-size: 0.85rem; }
 
+/* Host's read-only view: a fixed height, so a busy chat scrolls instead of pushing the page. */
+.host-chats { margin-top: 24px; }
+.host-chats__team { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.host-chats__team h3 { margin: 0; }
+.host-chats .chat__list { flex: none; height: 16rem; }
+
 @media (max-width: 939px) {
   /* Sheet open: `main` becomes the visible area, the game a compact strip on top and the sheet the rest. */
   .page.chat-open { position: fixed; top: var(--chat-vv-top, 0); left: 0; right: 0; display: flex; flex-direction: column; width: 100%; max-width: 480px; height: var(--chat-vv-height, 100dvh); margin: 0 auto; padding: max(8px, env(safe-area-inset-top)) 16px 0; overflow: hidden; }

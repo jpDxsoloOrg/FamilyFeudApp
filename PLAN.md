@@ -121,8 +121,9 @@ Two subscriptions:
    Used for: `YOU_ARE_UP`, `BUZZ_RESULT`, `FAST_MONEY_DUPLICATE`, `REMOVED`.
 
 3. **`onTeamMessage(gameId, teamId)`** — team chat. `sendTeamMessage` returns a `TeamMessage`
-   and AppSync filters delivery on `gameId` and `teamId`, so each team's phones get only their
-   own chat. The message text travels on the subscription, so chat is not a privacy boundary;
+   and AppSync filters delivery on `gameId` and `teamId`, so each team's devices get only their
+   own chat, and the host console subscribes to both teams to show them read only. The message
+   text travels on the subscription, so chat is not a privacy boundary;
    it is kept outside the `GAME#` partition and expires after 20 minutes
    (`TEAM_MESSAGE_TTL_MS`).
 

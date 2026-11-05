@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { CopyButton } from "../components/CopyButton";
 import { HostFastMoney } from "../components/HostFastMoney";
+import { HostTeamChats } from "../components/HostTeamChats";
 import { HostTokenGate } from "../components/HostTokenGate";
 import { HostRound } from "../components/HostRound";
 import { MuteToggle } from "../components/MuteToggle";
@@ -253,6 +254,8 @@ export function Host() {
           }}
         />
       )}
+
+      {game.teams.length > 0 && <HostTeamChats gameId={id} teams={game.teams} clockOffset={clockOffset} />}
     </main>
   );
 }

@@ -20,7 +20,8 @@ interface Props {
 const TTL_MINUTES = TEAM_MESSAGE_TTL_MS / 60_000;
 const PINNED_SLACK_PX = 32;
 
-function MessageList({ messages, me }: { messages: ApiTeamMessage[]; me: string }) {
+/** Without `me` (the host) nothing is styled as your own, so every message shows its sender. */
+export function MessageList({ messages, me, emptyText = "No messages yet. Say hi!" }: { messages: ApiTeamMessage[]; me?: string; emptyText?: string }) {
   const list = useRef<HTMLOListElement>(null);
   const pinned = useRef(true);
 
@@ -45,7 +46,7 @@ function MessageList({ messages, me }: { messages: ApiTeamMessage[]; me: string 
 
   return (
     <ol ref={list} className="chat__list" aria-live="polite" onScroll={onScroll}>
-      {messages.length === 0 && <li className="muted small">No messages yet. Say hi!</li>}
+      {messages.length === 0 && <li className="muted small">{emptyText}</li>}
       {messages.map((message) => {
         const mine = message.senderId === me;
         return (
@@ -166,7 +167,7 @@ export function TeamChat({ gameId, teamId, game, me, clockOffset, open, onOpenTe
         </button>
       </div>
       <MessageList messages={messages} me={me} />
-      <p className="chat__note muted">Messages disappear after {TTL_MINUTES} minutes. Only your team can see them.</p>
+      <p className="chat__note muted">Messages disappear after {TTL_MINUTES} minutes. Only your team and the host can see them.</p>
       {problem && <p className="field-error">{problem}</p>}
       <form className="chat__form" onSubmit={submit}>
         <input
