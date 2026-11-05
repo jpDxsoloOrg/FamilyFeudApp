@@ -6,7 +6,7 @@ TV or projector with a browser for the display, and each player's phone.
 ## Before the party
 
 1. Open the site and tap **Host a new game**. You land on **Setup**. The browser you do this in
-   now holds the *host token*; keep using it, or copy the token (**Copy host token**) to move
+   now holds the *host token*; keep using it, or copy the token (**Menu**, then **Copy host token**) to move
    hosting to another device.
 2. **Settings**: how many rounds (default 4), the point multiplier per round (default 1, 1, 2, 3),
    strikes before a steal (3), and the Fast Money question count (5), timers (20 s and 25 s) and
@@ -22,7 +22,7 @@ TV or projector with a browser for the display, and each player's phone.
 
 ## The lobby
 
-1. Click **Host console**, then **Open display** and drag that window to the TV. The display
+1. Click **Host console**, then **Display** (or press `D`), **Open display**, and drag that window to the TV. The display
    shows the join code and a QR code.
 2. Players open the site (or scan the code), enter the code and a name. They appear on the
    display as they arrive.
@@ -68,7 +68,7 @@ The console walks you through it; the display and phones follow automatically.
 ## Team chat
 
 Each team has a chat on their phones or computers for quick huddles during a face-off or steal. It is not
-shown on the TV. The **Team chats** section at the bottom of the host console shows both teams'
+shown on the TV. **Chats** on the host console (or `C`) shows both teams'
 chats side by side, read only, so you can follow along but not post. Messages vanish after 20 minutes.
 
 ## If something goes wrong
