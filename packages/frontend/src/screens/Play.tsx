@@ -7,6 +7,7 @@ import { DisplayFastMoney } from "../components/DisplayFastMoney";
 import { DisplayRound } from "../components/DisplayRound";
 import { PlayRound } from "../components/PlayRound";
 import { RealtimeBadge } from "../components/RealtimeBadge";
+import { TeamChat } from "../components/TeamChat";
 import { useGame } from "../hooks/useGame";
 import { useJustRevealed } from "../hooks/useJustRevealed";
 import { useJustRevealedFastMoney } from "../hooks/useJustRevealedFastMoney";
@@ -90,6 +91,7 @@ export function Play() {
   const justRevealedFm = useJustRevealedFastMoney(game?.fastMoney);
   const [buzzing, setBuzzing] = useState(false);
   const [problem, setProblem] = useState<string>();
+  const [chatOpenTeam, setChatOpenTeam] = useState<string>();
   const rejoinTried = useRef(false);
 
   /**
@@ -161,8 +163,12 @@ export function Play() {
     );
   }
 
+  const self = game.players.find((player) => player.id === me);
+  const chatTeamId = (self?.active && self.teamId) || undefined;
+  const chatOpen = chatTeamId !== undefined && chatOpenTeam === chatTeamId;
+
   return (
-    <main className="page page--narrow">
+    <main className={`page page--narrow${chatTeamId ? " page--chat" : ""}${chatOpen ? " chat-open" : ""}`}>
       <header className="page__header">
         <h1>Family Feud</h1>
         <nav className="page__nav">
@@ -170,32 +176,37 @@ export function Play() {
           <RealtimeBadge status={realtime} />
         </nav>
       </header>
-      {problem && <p className="field-error">{problem}</p>}
-      {(game.status === "LOBBY" || game.status === "TEAMS_SET") && <PlayerLobby game={game} me={me} />}
-      {game.status === "ROUND_ACTIVE" && game.currentRound && (
-        <PlayRound
-          game={game}
-          round={game.currentRound}
-          me={me}
-          lastEventKey={lastEvent?.serverTime ?? null}
-          lastEventName={lastEvent?.event}
-          justRevealed={justRevealed}
-          lastMessage={lastMessage}
-          buzzing={buzzing}
-          onBuzz={onBuzz}
-        />
-      )}
-      {game.status === "ROUND_ACTIVE" && !game.currentRound && <PlayerLobby game={game} me={me} />}
-      {(game.status === "FAST_MONEY" || game.status === "FINISHED") && gameId && (
-        <PlayFastMoney
-          gameId={gameId}
-          game={game}
-          me={me}
-          clockOffset={clockOffset}
-          lastEvent={lastEvent}
-          lastMessage={lastMessage}
-          justRevealed={justRevealedFm}
-        />
+      <div className="play__stage">
+        {problem && <p className="field-error">{problem}</p>}
+        {(game.status === "LOBBY" || game.status === "TEAMS_SET") && <PlayerLobby game={game} me={me} />}
+        {game.status === "ROUND_ACTIVE" && game.currentRound && (
+          <PlayRound
+            game={game}
+            round={game.currentRound}
+            me={me}
+            lastEventKey={lastEvent?.serverTime ?? null}
+            lastEventName={lastEvent?.event}
+            justRevealed={justRevealed}
+            lastMessage={lastMessage}
+            buzzing={buzzing}
+            onBuzz={onBuzz}
+          />
+        )}
+        {game.status === "ROUND_ACTIVE" && !game.currentRound && <PlayerLobby game={game} me={me} />}
+        {(game.status === "FAST_MONEY" || game.status === "FINISHED") && gameId && (
+          <PlayFastMoney
+            gameId={gameId}
+            game={game}
+            me={me}
+            clockOffset={clockOffset}
+            lastEvent={lastEvent}
+            lastMessage={lastMessage}
+            justRevealed={justRevealedFm}
+          />
+        )}
+      </div>
+      {chatTeamId && gameId && (
+        <TeamChat key={chatTeamId} gameId={gameId} teamId={chatTeamId} game={game} me={me} clockOffset={clockOffset} open={chatOpen} onOpenTeamChange={setChatOpenTeam} />
       )}
     </main>
   );

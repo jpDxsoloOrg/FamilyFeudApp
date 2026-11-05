@@ -6,6 +6,7 @@ import type {
   ApiGameUpdate,
   ApiHostGame,
   ApiPlayerMessage,
+  ApiTeamMessage,
   FastMoneyQuestion,
   GameConfigInput,
   Survey,
@@ -111,6 +112,9 @@ export const GAME_FIELDS = `
  */
 export const GAME_UPDATE_FIELDS = `gameId event serverTime game { ${GAME_FIELDS} }`;
 
+/** As with game updates, subscribers get only what the mutation selected, and AppSync filters on gameId and teamId. */
+export const TEAM_MESSAGE_FIELDS = "gameId teamId id senderId senderName text sentAt";
+
 const SURVEY_FIELDS = "number text used answers { text points }";
 const FM_QUESTION_FIELDS = "number text answers { text points }";
 
@@ -120,6 +124,10 @@ export const ON_GAME_UPDATED = `subscription OnGameUpdated($gameId: ID!) {
 
 export const ON_PLAYER_MESSAGE = `subscription OnPlayerMessage($gameId: ID!, $playerId: ID!) {
   onPlayerMessage(gameId: $gameId, playerId: $playerId) { gameId playerId type detail serverTime }
+}`;
+
+export const ON_TEAM_MESSAGE = `subscription OnTeamMessage($gameId: ID!, $teamId: ID!) {
+  onTeamMessage(gameId: $gameId, teamId: $teamId) { ${TEAM_MESSAGE_FIELDS} }
 }`;
 
 /* ---------- queries ---------- */
@@ -344,6 +352,26 @@ export async function skipFastMoneyQuestion(gameId: string, playerId: string, qu
     { gameId, playerId, questionIndex },
   );
   return data.skipFastMoneyQuestion;
+}
+
+/* ---------- team chat ---------- */
+
+export async function fetchTeamMessages(gameId: string, teamId: string): Promise<ApiTeamMessage[]> {
+  const data = await gql<{ teamMessages: ApiTeamMessage[] }>(
+    `query TeamMessages($gameId: ID!, $teamId: ID!) { teamMessages(gameId: $gameId, teamId: $teamId) { ${TEAM_MESSAGE_FIELDS} } }`,
+    { gameId, teamId },
+  );
+  return data.teamMessages;
+}
+
+export async function sendTeamMessage(gameId: string, playerId: string, text: string): Promise<ApiTeamMessage> {
+  const data = await gql<{ sendTeamMessage: ApiTeamMessage }>(
+    `mutation SendTeamMessage($gameId: ID!, $playerId: ID!, $text: String!) {
+      sendTeamMessage(gameId: $gameId, playerId: $playerId, text: $text) { ${TEAM_MESSAGE_FIELDS} }
+    }`,
+    { gameId, playerId, text },
+  );
+  return data.sendTeamMessage;
 }
 
 /* ---------- authoring ---------- */

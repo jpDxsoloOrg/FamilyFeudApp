@@ -197,7 +197,7 @@ select.input { appearance: auto; }
 .banner--blue { background: linear-gradient(180deg, var(--blue-2), var(--blue)); }
 @keyframes banner-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.03); } }
 .banner--pulse { animation: banner-pulse 1s ease-in-out infinite; }
-.toast { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); padding: 14px; border-radius: var(--radius); background: var(--gold); color: var(--ink); font-weight: 800; text-align: center; z-index: 60; box-shadow: var(--shadow); }
+.toast { position: fixed; left: 16px; right: 16px; bottom: calc(16px + var(--chat-bar-height, 0px) + env(safe-area-inset-bottom)); pointer-events: none; padding: 14px; border-radius: var(--radius); background: var(--gold); color: var(--ink); font-weight: 800; text-align: center; z-index: 60; box-shadow: var(--shadow); }
 .guesser { text-align: center; font-size: clamp(1.1rem, 3vw, 2rem); margin: 8px 0; }
 .guesser strong { color: var(--gold-2); }
 
@@ -264,3 +264,76 @@ select.input { appearance: auto; }
 .fm-table th { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gold); }
 .fm-table__dup { color: #ff8a97; font-weight: 800; }
 .fm-table .button { margin-left: 8px; }
+
+/* ---------- team chat ---------- */
+.page--chat { --chat-bar-height: 48px; padding-bottom: calc(32px + var(--chat-bar-height) + env(safe-area-inset-bottom)); }
+/* A long revealed answer must not widen the page, or phones zoom out and the fixed bar leaves the screen. */
+.page--chat .slot { min-width: 0; }
+/* z-index 30 throughout: under the BUZZ overlay (40), strike flash (50) and toasts (60). */
+.chat-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; max-width: 480px; min-height: calc(var(--chat-bar-height) + env(safe-area-inset-bottom)); margin: 0 auto; padding: 0 16px env(safe-area-inset-bottom); border: 0; border-top: 2px solid var(--gold); border-radius: var(--radius) var(--radius) 0 0; background: var(--navy-2); color: var(--white); font: inherit; font-weight: 800; cursor: pointer; touch-action: manipulation; }
+.chat-bar:focus-visible { outline: 3px solid var(--gold-2); outline-offset: -3px; }
+
+.chat-sheet { position: relative; z-index: 30; flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 6px; margin: 6px -16px 0; padding: 8px 16px calc(8px + env(safe-area-inset-bottom)); border-top: 2px solid var(--gold); border-radius: var(--radius) var(--radius) 0 0; background: var(--navy); }
+/* The keyboard leaves no room for the board, so the sheet takes all of `main`. */
+.chat-sheet--typing { position: absolute; inset: 0; margin: 0; padding: max(8px, env(safe-area-inset-top)) 16px 8px; border-top: 0; border-radius: 0; }
+.chat-sheet--typing .chat__note { display: none; }
+.chat__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.chat__title { font-family: var(--font-display); letter-spacing: 0.03em; color: var(--gold); }
+.chat__list { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; overflow-y: auto; overscroll-behavior: contain; }
+.chat__msg { align-self: flex-start; max-width: 85%; padding: 6px 10px; border-radius: var(--radius-sm); background: var(--surface-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat__msg--mine { align-self: flex-end; background: var(--blue-2); }
+.chat__sender { display: block; font-size: 0.75rem; font-weight: 800; color: var(--gold-2); }
+.chat__note { margin: 0; font-size: 0.75rem; }
+.chat__form { display: flex; gap: 8px; }
+/* Under 16px and iOS zooms the page on focus. */
+.chat__input { flex: 1 1 auto; min-width: 0; font-size: 16px; }
+.chat-strip { flex: 1 1 auto; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; min-width: 0; font-size: 0.85rem; }
+.chat-strip__team { display: flex; justify-content: space-between; gap: 6px; min-width: 0; }
+.chat-strip__team strong { color: var(--gold-2); font-variant-numeric: tabular-nums; }
+.chat-strip__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-strip__strikes { display: flex; gap: 2px; }
+.chat-strip .strikes__x { font-size: 0.85rem; }
+
+@media (max-width: 939px) {
+  /* Sheet open: `main` becomes the visible area, the game a compact strip on top and the sheet the rest. */
+  .page.chat-open { position: fixed; top: var(--chat-vv-top, 0); left: 0; right: 0; display: flex; flex-direction: column; width: 100%; max-width: 480px; height: var(--chat-vv-height, 100dvh); margin: 0 auto; padding: max(8px, env(safe-area-inset-top)) 16px 0; overflow: hidden; }
+  .chat-open .page__header, .chat-open .state-line, .chat-open .play-round__roster, .chat-open .fm__eyes { display: none; }
+  .chat-open .play__stage { flex: 0 1 auto; min-width: 0; min-height: 0; max-height: 45%; overflow-y: auto; }
+  .chat-open .question { margin: 4px 0; max-width: none; font-size: 0.95rem; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+  .chat-open .banner { margin: 4px 0; padding: 4px 8px; font-size: 0.95rem; box-shadow: none; }
+  .chat-open .guesser { margin: 2px 0; font-size: 0.85rem; }
+  .chat-open .strikes { margin: 2px 0; gap: 6px; }
+  .chat-open .strikes__x { font-size: 1rem; }
+  .chat-open .scoreboard { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 6px; margin: 0 0 4px; }
+  .chat-open .scoreboard__team { flex-direction: row; justify-content: space-between; gap: 6px; padding: 2px 8px; border-radius: var(--radius-sm); }
+  .chat-open .scoreboard__name { min-width: 0; font-size: 0.8rem; }
+  .chat-open .scoreboard__score { font-size: 1.15rem; }
+  .chat-open .scoreboard__pot { flex-direction: row; gap: 4px; min-width: 0; padding: 2px 8px; border-width: 2px; border-radius: var(--radius-sm); box-shadow: none; }
+  .chat-open .scoreboard__potLabel { font-size: 0.6rem; }
+  .chat-open .scoreboard__potValue { font-size: 1rem; }
+  .chat-open .board { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(4, auto); grid-auto-flow: column; gap: 4px; margin: 4px 0; }
+  .chat-open .slot { min-height: 28px; padding: 0 6px; border-width: 1px; font-size: 0.8rem; box-shadow: none; }
+  .chat-open .slot__text { min-width: 0; }
+  .chat-open .slot .points { margin-left: 4px; padding: 0 5px; border-radius: 5px; }
+  .chat-open .fm { gap: 3px; margin: 4px 0; }
+  .chat-open .fm__head, .chat-open .fm__row { grid-template-columns: 1.5rem minmax(0, 1fr) minmax(0, 1fr); gap: 4px; }
+  .chat-open .fm__head > span:first-child { display: block; }
+  .chat-open .fm__row .fm__q { grid-column: auto; padding: 0; }
+  .chat-open .fm__cell { min-height: 26px; padding: 0 6px; border-width: 1px; font-size: 0.8rem; box-shadow: none; }
+  .chat-open .fm__total { margin-top: 2px; padding: 2px 6px; }
+  .chat-open .fm__totalValue { font-size: 1.2rem; }
+  .chat-open .fm__stage { margin: 4px 0; }
+  .chat-open .fm__bigclock { font-size: 2.2rem; }
+  .chat-open .fm__turn { gap: 4px; }
+  .chat-open .fm__turn .form { gap: 6px; }
+  .chat-open .fm__lookaway { padding: 8px; }
+  .chat-open .fm__lookaway h2 { margin-top: 4px; font-size: 1.2rem; }
+}
+
+/* Computers: a panel docked beside the board, which stays full size. The pair is centred together. */
+@media (min-width: 940px) {
+  .page--chat { --chat-side: max(24px, calc(50vw - 432px)); }
+  .chat-bar { left: auto; right: var(--chat-side); width: 360px; max-width: none; margin: 0; border-radius: var(--radius) var(--radius) 0 0; }
+  .page.chat-open { margin-left: calc(var(--chat-side) - 16px); margin-right: auto; }
+  .chat-sheet, .chat-sheet--typing { position: fixed; inset: auto var(--chat-side) 0 auto; width: 360px; height: min(600px, calc(100dvh - 32px)); margin: 0; padding: 12px 16px; border: 2px solid var(--gold); border-bottom: 0; border-radius: var(--radius) var(--radius) 0 0; }
+}

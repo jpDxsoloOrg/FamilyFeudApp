@@ -6,3 +6,4 @@ export * from "./round.js";
 export * from "./buzz.js";
 export * from "./fastMoney.js";
 export * from "./messages.js";
+export * from "./chat.js";

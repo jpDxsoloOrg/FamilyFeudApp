@@ -87,7 +87,7 @@ export function PlayRound({ game, round, me, lastEventKey, lastEventName, justRe
       )}
 
       {myTeam && (
-        <section>
+        <section className="play-round__roster">
           <h3>{myTeam.name}</h3>
           <ol className="roster">
             {myTeam.players

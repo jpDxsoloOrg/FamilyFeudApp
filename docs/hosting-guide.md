@@ -65,6 +65,11 @@ The console walks you through it; the display and phones follow automatically.
    shows the win.
 5. **Finish game**.
 
+## Team chat
+
+Each team has a chat on their phones or computers for quick huddles during a face-off or steal. It is not
+shown on the TV, and the host has no view of it. Messages vanish after 20 minutes.
+
 ## If something goes wrong
 
 - **A phone lost the game**: reopening the site puts them straight back in the same seat.

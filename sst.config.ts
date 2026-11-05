@@ -17,6 +17,8 @@ export default $config({
     const table = new sst.aws.Dynamo("Table", {
       fields: { pk: "string", sk: "string" },
       primaryIndex: { hashKey: "pk", rangeKey: "sk" },
+      // Chat messages carry an expiresAt (epoch seconds) so Dynamo sweeps them.
+      ttl: "expiresAt",
     });
 
     const api = new sst.aws.AppSync("Api", {
@@ -105,8 +107,9 @@ export default $config({
       "revealFastMoneyAnswer",
       "finishGame",
       "sendPlayerMessage",
+      "sendTeamMessage",
     ];
-    const queries = ["game", "hostGame", "fastMoneyView"];
+    const queries = ["game", "hostGame", "fastMoneyView", "teamMessages"];
 
     for (const field of mutations) {
       api.addResolver(`Mutation ${field}`, { dataSource: lambdaSource.name });

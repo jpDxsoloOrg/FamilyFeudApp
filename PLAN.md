@@ -120,6 +120,12 @@ Two subscriptions:
    delivery on the payload's `gameId` and `playerId`, so only that player's device receives it.
    Used for: `YOU_ARE_UP`, `BUZZ_RESULT`, `FAST_MONEY_DUPLICATE`, `REMOVED`.
 
+3. **`onTeamMessage(gameId, teamId)`** — team chat. `sendTeamMessage` returns a `TeamMessage`
+   and AppSync filters delivery on `gameId` and `teamId`, so each team's phones get only their
+   own chat. The message text travels on the subscription, so chat is not a privacy boundary;
+   it is kept outside the `GAME#` partition and expires after 20 minutes
+   (`TEAM_MESSAGE_TTL_MS`).
+
 Private messages are published by the Lambda calling its own API's `sendPlayerMessage`
 mutation (authorised by a deploy-time `INTERNAL_SECRET`; the API URL and key are read from an
 SSM parameter because the Lambda cannot be handed its own API's URL at deploy time).
@@ -247,6 +253,9 @@ code reference these task numbers in their `Not implemented` errors.
 - [x] 5.5 QR code on the display for joining; spectator mode
 - [x] 5.6 Deploy pipeline (`npx sst deploy --stage production`), custom domain, GitHub Actions on PR
 - [x] 5.7 README walkthrough for hosts
+
+### Milestone 6 — Team chat ✅
+- [x] 6.1 Team chat: `teamMessages` query, `sendTeamMessage` mutation and `onTeamMessage` subscription; 280 character limit and 20 minute expiry in `core/chat.ts`
 
 ## Future work
 

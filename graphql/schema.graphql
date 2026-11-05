@@ -222,12 +222,25 @@ type PlayerMessage {
   serverTime: Float!
 }
 
+"A friendly team-only chat line. Kept for 20 minutes."
+type TeamMessage {
+  gameId: ID!
+  teamId: ID!
+  id: ID!
+  senderId: ID!
+  senderName: String!
+  text: String!
+  sentAt: Float!
+}
+
 type Query {
   "Public, player-safe view. Hidden answers and Fast Money questions are stripped."
   game(gameId: ID!): Game
   hostGame(gameId: ID!, hostToken: String!): HostGame
   "Only the current Fast Money player gets questions; anyone else gets an empty queue."
   fastMoneyView(gameId: ID!, playerId: ID!): FastMoneyView
+  "Recent messages for one team, oldest first."
+  teamMessages(gameId: ID!, teamId: ID!): [TeamMessage!]!
 }
 
 type Mutation {
@@ -289,6 +302,9 @@ type Mutation {
 
   "Internal: used by the server to publish private messages (YOU_ARE_UP etc.)."
   sendPlayerMessage(gameId: ID!, hostToken: String!, playerId: ID!, type: PlayerMessageType!, detail: String): PlayerMessage!
+
+  "The team is taken from the player's own record."
+  sendTeamMessage(gameId: ID!, playerId: ID!, text: String!): TeamMessage!
 }
 
 type Subscription {
@@ -326,4 +342,6 @@ type Subscription {
   "Private channel: AppSync only delivers payloads whose gameId AND playerId match."
   onPlayerMessage(gameId: ID!, playerId: ID!): PlayerMessage
     @aws_subscribe(mutations: ["buzzDuplicate", "sendPlayerMessage"])
+
+  onTeamMessage(gameId: ID!, teamId: ID!): TeamMessage @aws_subscribe(mutations: ["sendTeamMessage"])
 }
