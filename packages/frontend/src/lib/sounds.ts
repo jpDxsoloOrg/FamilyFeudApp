@@ -115,14 +115,10 @@ export function scheduleBuzzer(ctx: BaseAudioContext, start: number, { frequency
 export const BUZZERS = {
   // The wrong-answer buzzer: long, low and flat.
   strike: { frequency: 130, duration: 0.85, gain: 0.2 },
-  // The same voice, shorter and higher, for buzzing in.
-  buzz: { frequency: 196, duration: 0.32, gain: 0.18 },
 } as const satisfies Partial<Record<SoundName, Buzzer>>;
 
-function playTones(tones: Tone[]): void {
-  const ctx = getContext();
-  if (!ctx || muted || !unlocked) return;
-  const now = ctx.currentTime;
+/** Takes any context, so a sound can be rendered offline. */
+export function scheduleTones(ctx: BaseAudioContext, now: number, tones: Tone[]): void {
   for (const tone of tones) {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -139,7 +135,16 @@ function playTones(tones: Tone[]): void {
   }
 }
 
-const SOUNDS: Record<Exclude<SoundName, keyof typeof BUZZERS>, Tone[]> = {
+/** A quick electronic ring: bright, urgent and nothing like the strike. */
+const BUZZ_IN_PULSES = 6;
+const BUZZ_IN_GAP = 0.052;
+const buzzIn: Tone[] = Array.from({ length: BUZZ_IN_PULSES }, (_, i) => [
+  { frequency: 1175, duration: 0.05, type: "square" as const, gain: 0.3, at: i * BUZZ_IN_GAP },
+  { frequency: 1760, duration: 0.05, type: "triangle" as const, gain: 0.36, at: i * BUZZ_IN_GAP },
+]).flat();
+
+export const SOUNDS: Record<Exclude<SoundName, keyof typeof BUZZERS>, Tone[]> = {
+  buzz: buzzIn,
   // Two-tone chime.
   ding: [
     { frequency: 880, duration: 0.25, gain: 0.25 },
@@ -204,10 +209,8 @@ const SOUNDS: Record<Exclude<SoundName, keyof typeof BUZZERS>, Tone[]> = {
 };
 
 export function play(name: SoundName): void {
-  if (name === "strike" || name === "buzz") {
-    const ctx = getContext();
-    if (ctx && !muted && unlocked) scheduleBuzzer(ctx, ctx.currentTime, BUZZERS[name]);
-    return;
-  }
-  playTones(SOUNDS[name]);
+  const ctx = getContext();
+  if (!ctx || muted || !unlocked) return;
+  if (name === "strike") scheduleBuzzer(ctx, ctx.currentTime, BUZZERS.strike);
+  else scheduleTones(ctx, ctx.currentTime, SOUNDS[name]);
 }
