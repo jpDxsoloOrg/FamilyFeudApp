@@ -19,7 +19,7 @@ import { useJustRevealedFastMoney } from "../hooks/useJustRevealedFastMoney";
 import { useMoments } from "../hooks/useMoments";
 import { usePlayerCues } from "../hooks/usePlayerCues";
 import { usePlayerMessages } from "../hooks/usePlayerMessages";
-import { useSounds } from "../hooks/useSounds";
+import { useSounds, withoutRoomSounds } from "../hooks/useSounds";
 import { useVisualViewport } from "../hooks/useVisualViewport";
 import { useWakeLock } from "../hooks/useWakeLock";
 import { buzz, joinGame, toApiError } from "../lib/api";
@@ -39,8 +39,7 @@ export function Play() {
   const { game, realtime, loading, error, lastEvent, clockOffset, applyUpdate } = useGame(gameId);
   const me = getPlayerId();
   const { last: lastMessage } = usePlayerMessages(gameId, me);
-  // The TV and host carry the buzz-in for the room; a roomful of phones would only echo it.
-  const { muted, toggleMuted } = useSounds(lastEvent?.event === "BUZZ" ? undefined : lastEvent);
+  const { muted, toggleMuted } = useSounds(withoutRoomSounds(lastEvent));
   const keyboardUp = useVisualViewport(true);
   const round = game?.currentRound;
   const { verdict, shownForRound } = useBuzzVerdict(round, me);

@@ -73,8 +73,8 @@ chats side by side, read only, so you can follow along but not post. Messages va
 
 ## Sound
 
-The buzz-in sound plays on the TV and the host console, not on players' phones, so the room hears
-one clean buzz. Tap the TV screen or press a key once before the game, because browsers keep a page
+The buzz-in and strike sounds play on the TV and the host console, not on players' phones, so the
+room hears them once. Tap the TV screen or press a key once before the game, because browsers keep a page
 silent until then.
 
 ## If something goes wrong
