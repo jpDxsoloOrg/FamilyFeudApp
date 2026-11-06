@@ -1,6 +1,6 @@
 // The TV. /display and /watch share this, and so does the spectator on a phone.
 import { useState, type ReactNode } from "react";
-import { useParams } from "react-router-dom";
+import { useMatch, useParams } from "react-router-dom";
 import { DisplayFastMoney } from "../components/DisplayFastMoney";
 import { DisplayRound } from "../components/DisplayRound";
 import { JoinQr } from "../components/JoinQr";
@@ -140,7 +140,9 @@ export function TvShow({ game, lastEvent, clockOffset, embedded }: ShowProps) {
 export function Display() {
   const { gameId } = useParams<{ gameId: string }>();
   const { game, realtime, loading, error, lastEvent, clockOffset } = useGame(gameId);
-  const { muted, toggleMuted } = useSounds(lastEvent);
+  // /watch is a follower's phone in the room, so it leaves the buzz-in to the TV.
+  const watching = useMatch("/watch/:gameId") !== null;
+  const { muted, toggleMuted } = useSounds(watching && lastEvent?.event === "BUZZ" ? undefined : lastEvent);
 
   return (
     <TvStage game={game} lastEvent={lastEvent} realtime={realtime} muted={muted} onToggleMuted={toggleMuted}>

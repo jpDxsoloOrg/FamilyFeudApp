@@ -27,7 +27,6 @@ import { otherTeam, teamOfPlayer } from "../lib/gameHelpers";
 import { buzzPhone } from "../lib/haptics";
 import { getDisplayName, getLastGame, getPlayerId, setLastGame } from "../lib/identity";
 import { barState, playerCue, spectatorCue } from "../lib/playerCue";
-import type { ApiGameUpdate } from "../lib/types";
 import { TvShow } from "./Display";
 
 const TOAST_MS = 2500;
@@ -40,9 +39,8 @@ export function Play() {
   const { game, realtime, loading, error, lastEvent, clockOffset, applyUpdate } = useGame(gameId);
   const me = getPlayerId();
   const { last: lastMessage } = usePlayerMessages(gameId, me);
-  const ownBuzz = useRef<ApiGameUpdate>();
-  // A mutation response and its broadcast both arrive here, so the buzzing phone would hear BUZZ twice.
-  const { muted, toggleMuted } = useSounds(lastEvent === ownBuzz.current ? undefined : lastEvent);
+  // The TV and host carry the buzz-in for the room; a roomful of phones would only echo it.
+  const { muted, toggleMuted } = useSounds(lastEvent?.event === "BUZZ" ? undefined : lastEvent);
   const keyboardUp = useVisualViewport(true);
   const round = game?.currentRound;
   const { verdict, shownForRound } = useBuzzVerdict(round, me);
@@ -125,9 +123,7 @@ export function Play() {
     if (!gameId) return false;
     setProblem(undefined);
     try {
-      const update = await buzz(gameId, me);
-      ownBuzz.current = update;
-      applyUpdate(update);
+      applyUpdate(await buzz(gameId, me));
       return true;
     } catch (cause) {
       setProblem(toApiError(cause).message);

@@ -71,6 +71,12 @@ Each team has a chat on their phones or computers for quick huddles during a fac
 shown on the TV. **Chats** on the host console (or `C`) shows both teams'
 chats side by side, read only, so you can follow along but not post. Messages vanish after 20 minutes.
 
+## Sound
+
+The buzz-in sound plays on the TV and the host console, not on players' phones, so the room hears
+one clean buzz. Tap the TV screen or press a key once before the game, because browsers keep a page
+silent until then.
+
 ## If something goes wrong
 
 - **A phone lost the game**: reopening the site puts them straight back in the same seat.
