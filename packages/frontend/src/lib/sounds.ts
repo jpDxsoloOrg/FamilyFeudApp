@@ -61,6 +61,64 @@ interface Tone {
   slideTo?: number;
 }
 
+/** A flat, nasal game-show buzzer: stacked detuned saws, driven hard into clipping, with a hard start and stop. */
+interface Buzzer {
+  frequency: number;
+  duration: number;
+  gain: number;
+}
+
+const DRIVE = 6;
+
+function driveCurve(): Float32Array<ArrayBuffer> {
+  const curve = new Float32Array(1024);
+  for (let i = 0; i < curve.length; i += 1) curve[i] = Math.tanh(((i / (curve.length - 1)) * 2 - 1) * DRIVE);
+  return curve;
+}
+
+/** Takes any context, so the same sound can be rendered offline. */
+export function scheduleBuzzer(ctx: BaseAudioContext, start: number, { frequency, duration, gain }: Buzzer): void {
+  const drive = ctx.createWaveShaper();
+  drive.curve = driveCurve();
+  const body = ctx.createBiquadFilter();
+  body.type = "peaking";
+  body.frequency.value = 1100;
+  body.Q.value = 1.2;
+  body.gain.value = 9;
+  const top = ctx.createBiquadFilter();
+  top.type = "lowpass";
+  top.frequency.value = 4200;
+  const level = ctx.createGain();
+  level.gain.setValueAtTime(0, start);
+  level.gain.linearRampToValueAtTime(gain, start + 0.006);
+  level.gain.setValueAtTime(gain, start + duration - 0.02);
+  level.gain.linearRampToValueAtTime(0, start + duration);
+  drive.connect(body).connect(top).connect(level).connect(ctx.destination);
+
+  const voices: [OscillatorType, number, number][] = [
+    ["sawtooth", frequency, 0.5],
+    ["sawtooth", frequency * 1.013, 0.5],
+    ["square", frequency / 2, 0.35],
+  ];
+  for (const [type, pitch, mix] of voices) {
+    const osc = ctx.createOscillator();
+    const voice = ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = pitch;
+    voice.gain.value = mix;
+    osc.connect(voice).connect(drive);
+    osc.start(start);
+    osc.stop(start + duration + 0.02);
+  }
+}
+
+export const BUZZERS = {
+  // The wrong-answer buzzer: long, low and flat.
+  strike: { frequency: 130, duration: 0.85, gain: 0.2 },
+  // The same voice, shorter and higher, for buzzing in.
+  buzz: { frequency: 196, duration: 0.32, gain: 0.18 },
+} as const satisfies Partial<Record<SoundName, Buzzer>>;
+
 function playTones(tones: Tone[]): void {
   const ctx = getContext();
   if (!ctx || muted || !unlocked) return;
@@ -81,19 +139,12 @@ function playTones(tones: Tone[]): void {
   }
 }
 
-const SOUNDS: Record<SoundName, Tone[]> = {
+const SOUNDS: Record<Exclude<SoundName, keyof typeof BUZZERS>, Tone[]> = {
   // Two-tone chime.
   ding: [
     { frequency: 880, duration: 0.25, gain: 0.25 },
     { frequency: 1318, duration: 0.5, gain: 0.25, at: 0.12 },
   ],
-  // Harsh descending buzzer.
-  strike: [
-    { frequency: 180, duration: 0.6, type: "sawtooth", gain: 0.3, slideTo: 90 },
-    { frequency: 183, duration: 0.6, type: "square", gain: 0.15, slideTo: 92 },
-  ],
-  // Short bright buzz-in.
-  buzz: [{ frequency: 660, duration: 0.18, type: "square", gain: 0.25, slideTo: 990 }],
   // Rising arpeggio.
   win: [
     { frequency: 523, duration: 0.2 },
@@ -153,5 +204,10 @@ const SOUNDS: Record<SoundName, Tone[]> = {
 };
 
 export function play(name: SoundName): void {
+  if (name === "strike" || name === "buzz") {
+    const ctx = getContext();
+    if (ctx && !muted && unlocked) scheduleBuzzer(ctx, ctx.currentTime, BUZZERS[name]);
+    return;
+  }
   playTones(SOUNDS[name]);
 }
