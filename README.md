@@ -66,3 +66,4 @@ npx sst deploy         # deploy your personal stage; --stage dev / production fo
   deploy workflows, and the hosting guide.
 - Team chat: each team has a friendly chat on their phones or computers, pushed live over `onTeamMessage`, and the host console shows both chats read only.
   It is not shown on the display, and messages expire after 20 minutes.
+- Redesign: the host console, join, player and TV screens share an original game-show look. See `docs/screenshots/redesign` for before and after shots.

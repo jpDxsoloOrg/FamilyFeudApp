@@ -30,7 +30,7 @@ export function Finale({ game, me, celebrate }: Props) {
         <Wordmark className="sx-finale__mark" />
         <div className="sx-finale__plate sx-bulbs">
           <Trophy className="sx-finale__trophy" aria-hidden="true" />
-          <h2 className="sx-finale__winner">{tied ? "It's a tie" : `${winner?.name ?? "—"} wins`}</h2>
+          <h2 className="sx-finale__winner">{tied ? "It's a tie" : `Winner: ${winner?.name ?? "—"}`}</h2>
         </div>
         {me && <p className="sx-finale__mine">{myTeam && !tied && myTeam.id === winner?.id ? "Your team won!" : "Good game"}</p>}
         <Scoreboard teams={game.teams} pot={0} multiplier={1} activeTeamId={tied ? undefined : winner?.id} meTeamId={myTeam?.id} hidePot />
