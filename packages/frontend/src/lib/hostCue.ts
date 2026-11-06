@@ -2,7 +2,7 @@
  * The host's one question, "what do I press now?", answered in one place.
  * A Cue drives the dock, the keys and the legend, so the three cannot disagree.
  */
-import { suggestMatch } from "@familyfeud/core";
+import { nextClosingReveal, suggestMatch } from "@familyfeud/core";
 import { Check, Eye, Flag, PenLine, Play, RotateCcw, Shuffle, SkipForward, Timer, Undo2, X, Zap, type LucideIcon } from "lucide-react";
 import type { HostData } from "../hooks/useHostGame";
 import { contestantsOf, otherTeam, playerName, ROUND_STATE_LABEL, teamName, teamOfPlayer } from "./gameHelpers";
@@ -342,8 +342,9 @@ function roundCue(ctx: CueContext, round: PublicRound): Cue {
     default: {
       const hidden = round.board.filter((slot) => !slot.revealed);
       const blue = { ...base, mood: "blue" as const, headline: `${round.pot} to ${teamName(game, round.awardedToTeamId)}, reveal the rest, then end the round` };
-      if (hidden.length > 0) {
-        const next = act("reveal-next", "Reveal next", "reveal", () => actions.revealNext(hidden[0].index), { size: "xl", key: "Space", icon: Eye });
+      const closing = nextClosingReveal(round.board);
+      if (closing) {
+        const next = act("reveal-next", "Reveal next", "reveal", () => actions.revealNext(closing.index), { size: "xl", key: "Space", icon: Eye });
         const end = act("end-round", "End round", "danger", actions.endRound, { hold: true, icon: Flag, title: "Hold to end the round with answers still hidden" });
         return withKeys({ ...blue, id: `${base.id}-hidden`, detail: `${hidden.length} still hidden`, lead: [next], support: [end], go: next });
       }

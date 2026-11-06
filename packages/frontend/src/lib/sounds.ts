@@ -1,8 +1,11 @@
 /**
- * Task 3.9 — sound effects synthesised with WebAudio (no assets to load).
+ * Task 3.9 — sound effects synthesised with WebAudio, plus the buzz-in and strike clips.
  * Browsers block audio until a user gesture, so `unlock()` is called on the
  * first tap/keypress and everything before that is silently dropped.
  */
+import buzzClipUrl from "../assets/buzzer.mp3";
+import strikeClipUrl from "../assets/wrong.mp3";
+
 const MUTE_KEY = "familyfeud.muted";
 
 export type SoundName = "buzz" | "ding" | "strike" | "win" | "armed" | "press" | "yourTurn" | "tick" | "timeUp" | "nope" | "sting" | "steal" | "join" | "fanfare";
@@ -44,6 +47,7 @@ export function unlock(): void {
   if (!ctx) return;
   if (ctx.state === "suspended") void ctx.resume();
   unlocked = true;
+  loadClips(ctx);
 }
 
 export function isUnlocked(): boolean {
@@ -61,10 +65,64 @@ interface Tone {
   slideTo?: number;
 }
 
-function playTones(tones: Tone[]): void {
-  const ctx = getContext();
-  if (!ctx || muted || !unlocked) return;
-  const now = ctx.currentTime;
+/** A flat, nasal game-show buzzer: stacked detuned saws, driven hard into clipping, with a hard start and stop. */
+interface Buzzer {
+  frequency: number;
+  duration: number;
+  gain: number;
+}
+
+const DRIVE = 6;
+
+function driveCurve(): Float32Array<ArrayBuffer> {
+  const curve = new Float32Array(1024);
+  for (let i = 0; i < curve.length; i += 1) curve[i] = Math.tanh(((i / (curve.length - 1)) * 2 - 1) * DRIVE);
+  return curve;
+}
+
+/** Takes any context, so the same sound can be rendered offline. */
+export function scheduleBuzzer(ctx: BaseAudioContext, start: number, { frequency, duration, gain }: Buzzer): void {
+  const drive = ctx.createWaveShaper();
+  drive.curve = driveCurve();
+  const body = ctx.createBiquadFilter();
+  body.type = "peaking";
+  body.frequency.value = 1100;
+  body.Q.value = 1.2;
+  body.gain.value = 9;
+  const top = ctx.createBiquadFilter();
+  top.type = "lowpass";
+  top.frequency.value = 4200;
+  const level = ctx.createGain();
+  level.gain.setValueAtTime(0, start);
+  level.gain.linearRampToValueAtTime(gain, start + 0.006);
+  level.gain.setValueAtTime(gain, start + duration - 0.02);
+  level.gain.linearRampToValueAtTime(0, start + duration);
+  drive.connect(body).connect(top).connect(level).connect(ctx.destination);
+
+  const voices: [OscillatorType, number, number][] = [
+    ["sawtooth", frequency, 0.5],
+    ["sawtooth", frequency * 1.013, 0.5],
+    ["square", frequency / 2, 0.35],
+  ];
+  for (const [type, pitch, mix] of voices) {
+    const osc = ctx.createOscillator();
+    const voice = ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = pitch;
+    voice.gain.value = mix;
+    osc.connect(voice).connect(drive);
+    osc.start(start);
+    osc.stop(start + duration + 0.02);
+  }
+}
+
+export const BUZZERS = {
+  // The wrong-answer buzzer, for the moment before the clip has loaded: long, low and flat.
+  strike: { frequency: 130, duration: 0.85, gain: 0.2 },
+} as const satisfies Partial<Record<SoundName, Buzzer>>;
+
+/** Takes any context, so a sound can be rendered offline. */
+export function scheduleTones(ctx: BaseAudioContext, now: number, tones: Tone[]): void {
   for (const tone of tones) {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -81,19 +139,71 @@ function playTones(tones: Tone[]): void {
   }
 }
 
-const SOUNDS: Record<SoundName, Tone[]> = {
+/** Both clips are quiet as recorded, so each gets its own boost. */
+const CLIPS = {
+  buzz: { url: buzzClipUrl, gain: 2.5 },
+  strike: { url: strikeClipUrl, gain: 2.8 },
+} as const;
+type ClipName = keyof typeof CLIPS;
+
+interface LoadedClip {
+  buffer: AudioBuffer;
+  /** Where the sound starts: it has to land with the moment on screen, not after a clip's silent lead-in. */
+  offset: number;
+}
+
+const SILENCE = 0.01;
+const clips: Partial<Record<ClipName, LoadedClip>> = {};
+let clipsRequested = false;
+
+function soundStart(buffer: AudioBuffer): number {
+  const first = buffer.getChannelData(0).findIndex((sample) => Math.abs(sample) > SILENCE);
+  return first > 0 ? first / buffer.sampleRate : 0;
+}
+
+function loadClips(ctx: BaseAudioContext): void {
+  if (clipsRequested) return;
+  clipsRequested = true;
+  for (const name of Object.keys(CLIPS) as ClipName[]) {
+    fetch(CLIPS[name].url)
+      .then((response) => response.arrayBuffer())
+      .then((data) => ctx.decodeAudioData(data))
+      .then((buffer) => {
+        clips[name] = { buffer, offset: soundStart(buffer) };
+      })
+      .catch(() => {
+        // The synthesised version covers it, and the next page load tries again.
+      });
+  }
+}
+
+function playClip(ctx: BaseAudioContext, name: ClipName): boolean {
+  const clip = clips[name];
+  if (!clip) return false;
+  const source = ctx.createBufferSource();
+  const level = ctx.createGain();
+  source.buffer = clip.buffer;
+  level.gain.value = CLIPS[name].gain;
+  source.connect(level).connect(ctx.destination);
+  source.start(0, clip.offset);
+  return true;
+}
+
+/** A quick electronic ring, for the moment before the clip has loaded. */
+const BUZZ_IN_PULSES = 6;
+const BUZZ_IN_GAP = 0.052;
+const buzzIn: Tone[] = Array.from({ length: BUZZ_IN_PULSES }, (_, i) => [
+  { frequency: 1175, duration: 0.05, type: "square" as const, gain: 0.3, at: i * BUZZ_IN_GAP },
+  { frequency: 1760, duration: 0.05, type: "triangle" as const, gain: 0.36, at: i * BUZZ_IN_GAP },
+]).flat();
+
+export const SOUNDS: Record<Exclude<SoundName, keyof typeof BUZZERS>, Tone[]> = {
+  buzz: buzzIn,
   // Two-tone chime.
   ding: [
     { frequency: 880, duration: 0.25, gain: 0.25 },
     { frequency: 1318, duration: 0.5, gain: 0.25, at: 0.12 },
   ],
-  // Harsh descending buzzer.
-  strike: [
-    { frequency: 180, duration: 0.6, type: "sawtooth", gain: 0.3, slideTo: 90 },
-    { frequency: 183, duration: 0.6, type: "square", gain: 0.15, slideTo: 92 },
-  ],
-  // Short bright buzz-in.
-  buzz: [{ frequency: 660, duration: 0.18, type: "square", gain: 0.25, slideTo: 990 }],
   // Rising arpeggio.
   win: [
     { frequency: 523, duration: 0.2 },
@@ -153,5 +263,9 @@ const SOUNDS: Record<SoundName, Tone[]> = {
 };
 
 export function play(name: SoundName): void {
-  playTones(SOUNDS[name]);
+  const ctx = getContext();
+  if (!ctx || muted || !unlocked) return;
+  if ((name === "strike" || name === "buzz") && playClip(ctx, name)) return;
+  if (name === "strike") scheduleBuzzer(ctx, ctx.currentTime, BUZZERS.strike);
+  else scheduleTones(ctx, ctx.currentTime, SOUNDS[name]);
 }

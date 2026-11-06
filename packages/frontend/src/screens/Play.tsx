@@ -19,7 +19,7 @@ import { useJustRevealedFastMoney } from "../hooks/useJustRevealedFastMoney";
 import { useMoments } from "../hooks/useMoments";
 import { usePlayerCues } from "../hooks/usePlayerCues";
 import { usePlayerMessages } from "../hooks/usePlayerMessages";
-import { useSounds } from "../hooks/useSounds";
+import { useSounds, withoutRoomSounds } from "../hooks/useSounds";
 import { useVisualViewport } from "../hooks/useVisualViewport";
 import { useWakeLock } from "../hooks/useWakeLock";
 import { buzz, joinGame, toApiError } from "../lib/api";
@@ -27,7 +27,6 @@ import { otherTeam, teamOfPlayer } from "../lib/gameHelpers";
 import { buzzPhone } from "../lib/haptics";
 import { getDisplayName, getLastGame, getPlayerId, setLastGame } from "../lib/identity";
 import { barState, playerCue, spectatorCue } from "../lib/playerCue";
-import type { ApiGameUpdate } from "../lib/types";
 import { TvShow } from "./Display";
 
 const TOAST_MS = 2500;
@@ -40,9 +39,7 @@ export function Play() {
   const { game, realtime, loading, error, lastEvent, clockOffset, applyUpdate } = useGame(gameId);
   const me = getPlayerId();
   const { last: lastMessage } = usePlayerMessages(gameId, me);
-  const ownBuzz = useRef<ApiGameUpdate>();
-  // A mutation response and its broadcast both arrive here, so the buzzing phone would hear BUZZ twice.
-  const { muted, toggleMuted } = useSounds(lastEvent === ownBuzz.current ? undefined : lastEvent);
+  const { muted, toggleMuted } = useSounds(withoutRoomSounds(lastEvent));
   const keyboardUp = useVisualViewport(true);
   const round = game?.currentRound;
   const { verdict, shownForRound } = useBuzzVerdict(round, me);
@@ -125,9 +122,7 @@ export function Play() {
     if (!gameId) return false;
     setProblem(undefined);
     try {
-      const update = await buzz(gameId, me);
-      ownBuzz.current = update;
-      applyUpdate(update);
+      applyUpdate(await buzz(gameId, me));
       return true;
     } catch (cause) {
       setProblem(toApiError(cause).message);

@@ -14,6 +14,13 @@ const SOUND_FOR_EVENT: Partial<Record<string, SoundName>> = {
   GAME_FINISHED: "win",
 };
 
+/** The TV and host carry these for the room; a roomful of phones would only echo them. */
+const ROOM_EVENTS: ReadonlySet<string> = new Set(["BUZZ", "STRIKE"]);
+
+export function withoutRoomSounds(update: ApiGameUpdate | undefined): ApiGameUpdate | undefined {
+  return update && ROOM_EVENTS.has(update.event) ? undefined : update;
+}
+
 export function useSounds(lastEvent: ApiGameUpdate | undefined): { muted: boolean; toggleMuted: () => void } {
   const [muted, setMutedState] = useState(isMuted);
 

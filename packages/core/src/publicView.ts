@@ -11,6 +11,11 @@ export function toPublicBoard(board: readonly BoardAnswer[]): PublicBoardAnswer[
   );
 }
 
+/** The closing reveal runs from the bottom of the board up, so the top answer lands last. */
+export function nextClosingReveal<T extends { index: number; revealed: boolean }>(board: readonly T[]): T | undefined {
+  return board.reduce<T | undefined>((lowest, slot) => (!slot.revealed && (!lowest || slot.index > lowest.index) ? slot : lowest), undefined);
+}
+
 /** The question is read aloud only once the buzzers are armed; before that it stays hidden. */
 const QUESTION_HIDDEN_STATES: ReadonlySet<RoundState> = new Set(["PICK_CONTESTANTS"]);
 

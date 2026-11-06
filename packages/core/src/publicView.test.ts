@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toPublicBoard, toPublicFastMoneyRows, toPublicRound } from "./publicView.js";
+import { nextClosingReveal, toPublicBoard, toPublicFastMoneyRows, toPublicRound } from "./publicView.js";
 import { createRound, roundReducer } from "./round.js";
 import { DEFAULT_CONFIG, type FastMoneyResponse, type Player, type RoundData, type Survey } from "./types.js";
 
@@ -95,5 +95,26 @@ describe("toPublicFastMoneyRows", () => {
       { slot: 2, questionIndex: 0, answer: null, points: null, revealed: false, skipped: true },
     ]);
     expect(leaks(view, ["secret", "matchedIndex", "skippedSeq"])).toEqual([]);
+  });
+});
+
+describe("nextClosingReveal", () => {
+  const board = (revealed: number[]) => [0, 1, 2, 3, 4, 5].map((index) => ({ index, revealed: revealed.includes(index) }));
+
+  it("starts from the bottom of the board", () => {
+    expect(nextClosingReveal(board([0, 2]))?.index).toBe(5);
+  });
+
+  it("works its way up, ending on the top answer", () => {
+    expect(nextClosingReveal(board([1, 2, 3, 4, 5]))?.index).toBe(0);
+  });
+
+  it("does not depend on the order of the board array", () => {
+    expect(nextClosingReveal([...board([])].reverse())?.index).toBe(5);
+  });
+
+  it("has nothing left once every answer is showing", () => {
+    expect(nextClosingReveal(board([0, 1, 2, 3, 4, 5]))).toBeUndefined();
+    expect(nextClosingReveal([])).toBeUndefined();
   });
 });
