@@ -1,6 +1,7 @@
 // Team chat: a slim bar that opens into a sheet on phones and a panel in the rail on computers. Only ever mounted for a player on a team.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { chatMoment, TEAM_MESSAGE_MAX_LENGTH, TEAM_MESSAGE_TTL_MS, unreadCount, unreadLabel } from "@familyfeud/core";
+import strikeX from "../assets/strike-x.webp";
 import { useTeamChat } from "../hooks/useTeamChat";
 import { sendTeamMessage, toApiError } from "../lib/api";
 import type { ApiGame, ApiTeam, ApiTeamMessage } from "../lib/types";
@@ -83,7 +84,7 @@ function ScoreStrip({ game }: { game: ApiGame }) {
         {showStrikes &&
           Array.from({ length: game.config.strikesToSteal }, (_, i) => (
             <span key={i} aria-hidden="true" className={`strikes__x${i < round.strikes ? " strikes__x--on" : ""}`}>
-              ✕
+              <img src={strikeX} alt="" />
             </span>
           ))}
       </span>

@@ -66,7 +66,7 @@
 .hx .chat__sender { font-size: 13px; }
 .hx .chat__list { flex: 1 1 0; }
 .hx .strikes { margin: 0; gap: 4px; }
-.hx .strikes__x { font-size: 1.15rem; }
+.hx .strikes__x { font-size: 1.35rem; }
 .hx .strike-flash span { font-size: min(30vw, 30vh); }
 .hx .qr { box-shadow: none; }
 
