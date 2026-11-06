@@ -45,7 +45,6 @@ export function SurveyBoard({ board, fresh }: Props) {
           >
             <span className="sx-tile__text">
               {slot.text}
-              {slot.index === 0 && <span className="sx-tile__top">Top answer</span>}
             </span>
             <span className="sx-tile__points">{slot.points}</span>
             {order !== -1 && <Doors />}

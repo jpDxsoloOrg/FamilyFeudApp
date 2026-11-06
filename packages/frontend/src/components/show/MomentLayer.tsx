@@ -3,23 +3,14 @@
  * Timers in `useMoments` and `usePlayerCues` take everything here off screen.
  */
 import { useEffect } from "react";
+import strikeX from "../../assets/strike-x.webp";
 import type { CurrentMoment } from "../../hooks/useMoments";
 import type { PlayerSplash } from "../../hooks/usePlayerCues";
 import { fireConfetti } from "../../lib/confetti";
 import type { Moment } from "../../lib/moments";
 
 function Blade({ newest }: { newest: boolean }) {
-  return (
-    <svg className="sx-blade" data-newest={newest ? "" : undefined} viewBox="0 0 100 100" aria-hidden="true">
-      {[45, -45].map((angle) => (
-        <g key={angle} transform={`rotate(${angle} 50 50)`}>
-          <polygon points="42,2 50,0 58,2 62,10 62,90 58,98 50,100 42,98 38,90 38,10" fill="#8f1626" />
-          <polygon points="42,2 50,0 50,100 42,98 38,90 38,10" fill="#ff4d5e" />
-          <polygon points="50,0 58,2 62,10 62,90 58,98 50,100" fill="#c81e35" />
-        </g>
-      ))}
-    </svg>
-  );
+  return <img className="sx-blade" src={strikeX} data-newest={newest ? "" : undefined} alt="" />;
 }
 
 function pointsLine(multiplier: number): string | undefined {

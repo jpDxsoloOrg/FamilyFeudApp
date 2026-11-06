@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import strikeX from "../assets/strike-x.webp";
 
 interface Props {
   count: number;
@@ -25,13 +26,15 @@ export function Strikes({ count, max, flashKey }: Props) {
       <div className="strikes" aria-label={`${count} of ${max} strikes`}>
         {Array.from({ length: max }, (_, i) => (
           <span key={i} className={`strikes__x${i < count ? " strikes__x--on" : ""}`}>
-            ✕
+            <img src={strikeX} alt="" />
           </span>
         ))}
       </div>
       {flash && (
         <div className="strike-flash" aria-hidden="true">
-          <span>✕</span>
+          <span>
+            <img src={strikeX} alt="" />
+          </span>
         </div>
       )}
     </>

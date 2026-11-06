@@ -162,10 +162,12 @@ select.input { appearance: auto; }
 
 /* ---------- strikes ---------- */
 .strikes { display: flex; gap: 10px; justify-content: center; margin: 8px 0; }
-.strikes__x { font-family: var(--font-display); font-size: clamp(1.6rem, 5vw, 3rem); color: rgba(255, 255, 255, 0.15); line-height: 1; }
-.strikes__x--on { color: var(--red-2); text-shadow: 0 0 16px rgba(215, 38, 61, 0.9); }
+.strikes__x { display: block; font-size: clamp(1.6rem, 5vw, 3rem); line-height: 1; }
+.strikes__x img { display: block; width: 1em; height: 1em; filter: grayscale(1) brightness(1.6); opacity: 0.22; }
+.strikes__x--on img { filter: none; opacity: 1; }
 .strike-flash { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 50; animation: strike-fade 1.2s ease-out forwards; background: rgba(215, 38, 61, 0.12); }
-.strike-flash span { font-family: var(--font-display); font-size: min(60vw, 60vh); color: var(--red-2); text-shadow: 0 0 60px rgba(0, 0, 0, 0.7); animation: strike-pop 0.3s ease-out; }
+.strike-flash span { font-size: min(60vw, 60vh); line-height: 1; filter: drop-shadow(0 0 40px rgba(0, 0, 0, 0.7)); animation: strike-pop 0.3s ease-out; }
+.strike-flash img { display: block; width: 1em; height: 1em; }
 @keyframes strike-pop { 0% { transform: scale(0.3); } 100% { transform: scale(1); } }
 @keyframes strike-fade { 0%, 60% { opacity: 1; } 100% { opacity: 0; } }
 
@@ -269,7 +271,7 @@ select.input { appearance: auto; }
 .chat-strip__team strong { color: var(--gold-2); font-variant-numeric: tabular-nums; }
 .chat-strip__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-strip__strikes { display: flex; gap: 2px; }
-.chat-strip .strikes__x { font-size: 0.85rem; }
+.chat-strip .strikes__x { font-size: 1.05rem; }
 
 /* Host's read-only view: a fixed height, so a busy chat scrolls instead of pushing the page. */
 .host-chats { margin-top: 24px; }
