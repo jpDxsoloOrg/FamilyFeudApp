@@ -1,7 +1,10 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@familyfeud/core": ["../core/src/index.ts"]
+    }
   },
   "include": ["src"]
 }
