@@ -1,8 +1,10 @@
 /**
- * Task 3.9 — sound effects synthesised with WebAudio (no assets to load).
+ * Task 3.9 — sound effects synthesised with WebAudio, plus the buzz-in clip.
  * Browsers block audio until a user gesture, so `unlock()` is called on the
  * first tap/keypress and everything before that is silently dropped.
  */
+import buzzClipUrl from "../assets/buzzer.mp3";
+
 const MUTE_KEY = "familyfeud.muted";
 
 export type SoundName = "buzz" | "ding" | "strike" | "win" | "armed" | "press" | "yourTurn" | "tick" | "timeUp" | "nope" | "sting" | "steal" | "join" | "fanfare";
@@ -44,6 +46,7 @@ export function unlock(): void {
   if (!ctx) return;
   if (ctx.state === "suspended") void ctx.resume();
   unlocked = true;
+  loadBuzzClip(ctx);
 }
 
 export function isUnlocked(): boolean {
@@ -135,7 +138,35 @@ export function scheduleTones(ctx: BaseAudioContext, now: number, tones: Tone[])
   }
 }
 
-/** A quick electronic ring: bright, urgent and nothing like the strike. */
+/** The clip is quiet as recorded. */
+const BUZZ_CLIP_GAIN = 2.5;
+let buzzClip: AudioBuffer | undefined;
+let buzzClipRequested = false;
+
+function loadBuzzClip(ctx: BaseAudioContext): void {
+  if (buzzClipRequested) return;
+  buzzClipRequested = true;
+  fetch(buzzClipUrl)
+    .then((response) => response.arrayBuffer())
+    .then((data) => ctx.decodeAudioData(data))
+    .then((clip) => {
+      buzzClip = clip;
+    })
+    .catch(() => {
+      // The synthesised ring covers it, and the next page load tries again.
+    });
+}
+
+function playClip(ctx: BaseAudioContext, clip: AudioBuffer, gain: number): void {
+  const source = ctx.createBufferSource();
+  const level = ctx.createGain();
+  source.buffer = clip;
+  level.gain.value = gain;
+  source.connect(level).connect(ctx.destination);
+  source.start();
+}
+
+/** A quick electronic ring, for the moment before the clip has loaded. */
 const BUZZ_IN_PULSES = 6;
 const BUZZ_IN_GAP = 0.052;
 const buzzIn: Tone[] = Array.from({ length: BUZZ_IN_PULSES }, (_, i) => [
@@ -212,5 +243,6 @@ export function play(name: SoundName): void {
   const ctx = getContext();
   if (!ctx || muted || !unlocked) return;
   if (name === "strike") scheduleBuzzer(ctx, ctx.currentTime, BUZZERS.strike);
+  else if (name === "buzz" && buzzClip) playClip(ctx, buzzClip, BUZZ_CLIP_GAIN);
   else scheduleTones(ctx, ctx.currentTime, SOUNDS[name]);
 }
