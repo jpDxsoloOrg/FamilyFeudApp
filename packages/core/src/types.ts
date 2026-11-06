@@ -30,8 +30,8 @@ export const DEFAULT_CONFIG: GameConfig = {
   roundMultipliers: [1, 1, 2, 3],
   strikesToSteal: 3,
   fastMoneyQuestionCount: 5,
-  fastMoneyP1Seconds: 20,
-  fastMoneyP2Seconds: 25,
+  fastMoneyP1Seconds: 50,
+  fastMoneyP2Seconds: 55,
   fastMoneyTarget: 200,
 };
 

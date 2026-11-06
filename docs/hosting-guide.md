@@ -9,7 +9,7 @@ TV or projector with a browser for the display, and each player's phone.
    now holds the *host token*; keep using it, or copy the token (**Menu**, then **Copy host token**) to move
    hosting to another device.
 2. **Settings**: how many rounds (default 4), the point multiplier per round (default 1, 1, 2, 3),
-   strikes before a steal (3), and the Fast Money question count (5), timers (20 s and 25 s) and
+   strikes before a steal (3), and the Fast Money question count (5), timers (50 s and 55 s) and
    target (200).
 3. **Survey questions**: one per round, up to 8 answers each with points. The board sorts them by
    points for you. Aim for answers that add up to about 100.
