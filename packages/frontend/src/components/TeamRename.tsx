@@ -1,11 +1,12 @@
-import { useState, type FormEvent } from "react";
+import { Check, PenLine, X } from "lucide-react";
+import { useState, type FormEvent, type KeyboardEvent } from "react";
 
 const MAX_TEAM_NAME_LENGTH = 30;
 
 interface Props {
   name: string;
   busy: boolean;
-  onRename: (name: string) => Promise<void>;
+  onRename: (name: string) => Promise<unknown>;
 }
 
 /** A team heading that turns into an inline rename form. */
@@ -20,10 +21,18 @@ export function TeamRename({ name, busy, onRename }: Props) {
     setEditing(false);
   }
 
+  function onKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
+    if (event.key !== "Escape") return;
+    // Stops here, or an open sheet would close with it.
+    event.preventDefault();
+    event.stopPropagation();
+    setEditing(false);
+  }
+
   if (!editing) {
     return (
-      <div className="button-row">
-        <h3 style={{ margin: 0 }}>{name}</h3>
+      <div className="hx-rename">
+        <h3 className="hx-rename__name">{name}</h3>
         <button
           className="button button--small button--ghost"
           type="button"
@@ -33,14 +42,14 @@ export function TeamRename({ name, busy, onRename }: Props) {
             setEditing(true);
           }}
         >
-          Rename
+          <PenLine size={16} aria-hidden="true" /> Rename
         </button>
       </div>
     );
   }
 
   return (
-    <form className="button-row" onSubmit={submit}>
+    <form className="hx-rename" onSubmit={submit}>
       <input
         className="input input--small"
         aria-label="Team name"
@@ -48,12 +57,13 @@ export function TeamRename({ name, busy, onRename }: Props) {
         maxLength={MAX_TEAM_NAME_LENGTH}
         autoFocus
         onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={onKeyDown}
       />
       <button className="button button--small button--primary" type="submit" disabled={busy}>
-        Save
+        <Check size={16} aria-hidden="true" /> Save
       </button>
       <button className="button button--small button--ghost" type="button" onClick={() => setEditing(false)}>
-        Cancel
+        <X size={16} aria-hidden="true" /> Cancel
       </button>
     </form>
   );

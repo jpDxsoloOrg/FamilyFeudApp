@@ -16,6 +16,7 @@ import {
   upsertSurvey,
 } from "../lib/api";
 import type { FastMoneyQuestion, GameConfig, Survey } from "../lib/types";
+import "../host.css";
 
 type ConfigDraft = Record<Exclude<keyof GameConfig, "roundMultipliers">, string> & { roundMultipliers: string[] };
 
@@ -43,14 +44,21 @@ function fromDraft(draft: ConfigDraft): GameConfig {
   };
 }
 
-const NUMBER_FIELDS: { key: Exclude<keyof GameConfig, "roundMultipliers">; label: string; hint: string }[] = [
-  { key: "roundCount", label: "Rounds", hint: "1–10" },
-  { key: "strikesToSteal", label: "Strikes to steal", hint: "1–5" },
-  { key: "fastMoneyQuestionCount", label: "Fast Money questions", hint: "1–10" },
-  { key: "fastMoneyP1Seconds", label: "Player 1 seconds", hint: "5–180" },
-  { key: "fastMoneyP2Seconds", label: "Player 2 seconds", hint: "5–180" },
-  { key: "fastMoneyTarget", label: "Fast Money target", hint: "points to win" },
+const NUMBER_FIELDS: { key: Exclude<keyof GameConfig, "roundMultipliers">; label: string; hint: string; min: number; max: number }[] = [
+  { key: "roundCount", label: "Rounds", hint: "1–10", min: 1, max: 10 },
+  { key: "strikesToSteal", label: "Strikes to steal", hint: "1–5", min: 1, max: 5 },
+  { key: "fastMoneyQuestionCount", label: "Fast Money questions", hint: "1–10", min: 1, max: 10 },
+  { key: "fastMoneyP1Seconds", label: "Player 1 seconds", hint: "5–180", min: 5, max: 180 },
+  { key: "fastMoneyP2Seconds", label: "Player 2 seconds", hint: "5–180", min: 5, max: 180 },
+  { key: "fastMoneyTarget", label: "Fast Money target", hint: "points to win", min: 1, max: 1000 },
 ];
+const MULTIPLIER_MIN = 1;
+const MULTIPLIER_MAX = 10;
+
+function outOfRange(value: string, min: number, max: number): boolean {
+  const number = Number(value);
+  return !Number.isInteger(number) || number < min || number > max;
+}
 
 function ConfigForm({
   config,
@@ -66,9 +74,11 @@ function ConfigForm({
   const [message, setMessage] = useState<string>();
   const [error, setError] = useState<string>();
 
+  // By value: a broadcast of the same config must not wipe unsaved edits.
+  const configKey = JSON.stringify(config);
   useEffect(() => {
-    setDraft(toDraft(config));
-  }, [config]);
+    setDraft(toDraft(JSON.parse(configKey) as GameConfig));
+  }, [configKey]);
 
   /** Keep the multiplier list the same length as the round count while typing. */
   function setRoundCount(value: string): void {
@@ -102,7 +112,7 @@ function ConfigForm({
     <form className="card form" onSubmit={submit} noValidate>
       {locked && <p className="notice">The game has started; settings are locked.</p>}
       <div className="grid-2">
-        {NUMBER_FIELDS.map(({ key, label, hint }) => (
+        {NUMBER_FIELDS.map(({ key, label, hint, min, max }) => (
           <div className="field" key={key}>
             <label className="label" htmlFor={`cfg-${key}`}>
               {label} <span className="muted small">({hint})</span>
@@ -119,6 +129,11 @@ function ConfigForm({
                   : setDraft((current) => ({ ...current, [key]: event.target.value }))
               }
             />
+            {!locked && outOfRange(draft[key], min, max) && (
+              <span className="hx-range">
+                Whole number from {min} to {max}
+              </span>
+            )}
           </div>
         ))}
       </div>
@@ -144,6 +159,11 @@ function ConfigForm({
             </label>
           ))}
         </div>
+        {!locked && draft.roundMultipliers.some((value) => outOfRange(value, MULTIPLIER_MIN, MULTIPLIER_MAX)) && (
+          <span className="hx-range">
+            Multipliers are whole numbers from {MULTIPLIER_MIN} to {MULTIPLIER_MAX}
+          </span>
+        )}
       </div>
       {error && <p className="field-error">{error}</p>}
       <div className="button-row">
@@ -191,6 +211,20 @@ function QuestionList<T extends { number: number; text: string; answers: { text:
   const [error, setError] = useState<string>();
 
   const taken = items.map((item) => item.number);
+
+  useEffect(() => {
+    if (confirming === null && !editing) return;
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== "Escape" || busy) return;
+      // A stray Esc while typing must not throw away a half-written question.
+      if (event.target instanceof HTMLElement && event.target.matches("input, textarea, select")) return;
+      setConfirming(null);
+      setEditing(null);
+      setError(undefined);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [confirming, editing, busy]);
 
   async function save(draft: QuestionDraft): Promise<void> {
     setBusy(true);
@@ -250,7 +284,7 @@ function QuestionList<T extends { number: number; text: string; answers: { text:
               </button>
               {onDelete && confirming !== item.number && (
                 <button
-                  className="button button--small button--danger"
+                  className="button button--small hx-ember"
                   type="button"
                   disabled={busy || !canDelete(item)}
                   onClick={() => setConfirming(item.number)}
@@ -261,7 +295,7 @@ function QuestionList<T extends { number: number; text: string; answers: { text:
               {onDelete && confirming === item.number && (
                 <>
                   <button
-                    className="button button--small button--danger"
+                    className="button button--small hx-ember"
                     type="button"
                     disabled={busy}
                     aria-label={`Confirm delete #${item.number}`}
@@ -315,9 +349,11 @@ export function HostSetup() {
 
   if (!gameId) {
     return (
-      <main className="page page--narrow">
-        <h1>Game Setup</h1>
-        <Link to="/">Back to start</Link>
+      <main className="hx hx-center">
+        <div className="hx-panel">
+          <h1>Game Setup</h1>
+          <Link to="/">Back to start</Link>
+        </div>
       </main>
     );
   }
@@ -327,9 +363,11 @@ export function HostSetup() {
 
   if (!game) {
     return (
-      <main className="page">
-        <h1>Game Setup</h1>
-        <p className="muted">{loading ? "Loading…" : (error?.message ?? "That game could not be found.")}</p>
+      <main className="hx hx-center">
+        <div className="hx-panel">
+          <h1>Game Setup</h1>
+          <p className="muted">{loading ? "Loading…" : (error?.message ?? "That game could not be found.")}</p>
+        </div>
       </main>
     );
   }
@@ -341,11 +379,11 @@ export function HostSetup() {
   const fmNeeded = game.config.fastMoneyQuestionCount;
 
   return (
-    <main className="page">
-      <header className="page__header">
+    <main className="hx hx-page">
+      <header className="hx-setup__bar">
         <h1>Game Setup</h1>
-        <nav className="page__nav">
-          <span className="muted">
+        <nav className="hx-setup__nav">
+          <span className="hx-note">
             Code <strong>{game.joinCode}</strong>
           </span>
           <Link className="button button--small" to={`/host/${gameId}`}>
@@ -358,80 +396,105 @@ export function HostSetup() {
 
       {hostError && <p className="field-error">{hostError.message}</p>}
 
-      <h2>Settings</h2>
-      <ConfigForm
-        config={game.config}
-        locked={locked}
-        onSave={async (config) => applyUpdate(await updateConfig(gameId, hostToken, config))}
-      />
+      <nav className="hx-jumps" aria-label="Jump to">
+        <a href="#settings">Settings</a>
+        <a href="#bank">Bank</a>
+        <a href="#surveys">
+          Surveys {surveys.length}/{surveysNeeded}
+        </a>
+        <a href="#fast-money">
+          Fast Money {fastMoneyQuestions.length}/{fmNeeded}
+        </a>
+      </nav>
 
-      <QuestionBankTools
-        surveys={surveys}
-        fastMoneyQuestions={fastMoneyQuestions}
-        busy={locked}
-        onImport={async (bank) => {
-          let nextSurvey = surveys.reduce((max, s) => Math.max(max, s.number), 0) + 1;
-          let nextFm = fastMoneyQuestions.reduce((max, q) => Math.max(max, q.number), 0) + 1;
-          const addedSurveys: Survey[] = [];
-          const addedFm: FastMoneyQuestion[] = [];
-          for (const q of bank.surveys) addedSurveys.push(await upsertSurvey(gameId, hostToken, nextSurvey++, q.text, q.answers));
-          for (const q of bank.fastMoney) addedFm.push(await upsertFastMoneyQuestion(gameId, hostToken, nextFm++, q.text, q.answers));
-          patchHost((current) => ({
-            ...current,
-            surveys: [...current.surveys, ...addedSurveys].sort((a, b) => a.number - b.number),
-            fastMoneyQuestions: [...current.fastMoneyQuestions, ...addedFm].sort((a, b) => a.number - b.number),
-          }));
-        }}
-      />
+      <div className="hx-setup">
+        <div className="hx-setup__left">
+          <div id="settings">
+            <h2>Settings</h2>
+            <ConfigForm
+              config={game.config}
+              locked={locked}
+              onSave={async (config) => applyUpdate(await updateConfig(gameId, hostToken, config))}
+            />
+          </div>
 
-      <QuestionList<Survey>
-        heading={`Survey questions (${surveys.length}/${surveysNeeded} needed)`}
-        intro="One per round. Up to 8 answers each; the board sorts them by points. A survey that has been played is locked."
-        items={surveys}
-        editorTitle="Survey"
-        canEdit={(survey) => !survey.used}
-        canDelete={(survey) => !survey.used}
-        lockedTag={(survey) => (survey.used ? "played" : undefined)}
-        onSave={async (draft) => {
-          const saved = await upsertSurvey(gameId, hostToken, draft.number, draft.text, draft.answers);
-          patchHost((current) => ({
-            ...current,
-            surveys: [...current.surveys.filter((s) => s.number !== saved.number), saved].sort(
-              (a, b) => a.number - b.number,
-            ),
-          }));
-        }}
-        onDelete={async (survey) => {
-          await deleteSurvey(gameId, hostToken, survey.number);
-          patchHost((current) => ({ ...current, surveys: current.surveys.filter((s) => s.number !== survey.number) }));
-        }}
-      />
+          <div id="bank">
+            <QuestionBankTools
+              surveys={surveys}
+              fastMoneyQuestions={fastMoneyQuestions}
+              busy={locked}
+              onImport={async (bank) => {
+                let nextSurvey = surveys.reduce((max, s) => Math.max(max, s.number), 0) + 1;
+                let nextFm = fastMoneyQuestions.reduce((max, q) => Math.max(max, q.number), 0) + 1;
+                const addedSurveys: Survey[] = [];
+                const addedFm: FastMoneyQuestion[] = [];
+                for (const q of bank.surveys) addedSurveys.push(await upsertSurvey(gameId, hostToken, nextSurvey++, q.text, q.answers));
+                for (const q of bank.fastMoney) addedFm.push(await upsertFastMoneyQuestion(gameId, hostToken, nextFm++, q.text, q.answers));
+                patchHost((current) => ({
+                  ...current,
+                  surveys: [...current.surveys, ...addedSurveys].sort((a, b) => a.number - b.number),
+                  fastMoneyQuestions: [...current.fastMoneyQuestions, ...addedFm].sort((a, b) => a.number - b.number),
+                }));
+              }}
+            />
+          </div>
+        </div>
 
-      <QuestionList<FastMoneyQuestion>
-        heading={`Fast Money questions (${fastMoneyQuestions.length}/${fmNeeded} needed)`}
-        intro="Quick-fire questions for the finale. Locked once Fast Money starts."
-        items={fastMoneyQuestions}
-        editorTitle="Fast Money question"
-        canEdit={() => game.status !== "FAST_MONEY" && game.status !== "FINISHED"}
-        canDelete={() => game.status !== "FAST_MONEY" && game.status !== "FINISHED"}
-        lockedTag={() => (game.status === "FAST_MONEY" || game.status === "FINISHED" ? "locked" : undefined)}
-        onSave={async (draft) => {
-          const saved = await upsertFastMoneyQuestion(gameId, hostToken, draft.number, draft.text, draft.answers);
-          patchHost((current) => ({
-            ...current,
-            fastMoneyQuestions: [...current.fastMoneyQuestions.filter((q) => q.number !== saved.number), saved].sort(
-              (a, b) => a.number - b.number,
-            ),
-          }));
-        }}
-        onDelete={async (question) => {
-          await deleteFastMoneyQuestion(gameId, hostToken, question.number);
-          patchHost((current) => ({
-            ...current,
-            fastMoneyQuestions: current.fastMoneyQuestions.filter((q) => q.number !== question.number),
-          }));
-        }}
-      />
+        <div className="hx-setup__right">
+          <div id="surveys">
+            <QuestionList<Survey>
+              heading={`Survey questions (${surveys.length}/${surveysNeeded} needed)`}
+              intro="One per round. Up to 8 answers each; the board sorts them by points. A survey that has been played is locked."
+              items={surveys}
+              editorTitle="Survey"
+              canEdit={(survey) => !survey.used}
+              canDelete={(survey) => !survey.used}
+              lockedTag={(survey) => (survey.used ? "played" : undefined)}
+              onSave={async (draft) => {
+                const saved = await upsertSurvey(gameId, hostToken, draft.number, draft.text, draft.answers);
+                patchHost((current) => ({
+                  ...current,
+                  surveys: [...current.surveys.filter((s) => s.number !== saved.number), saved].sort(
+                    (a, b) => a.number - b.number,
+                  ),
+                }));
+              }}
+              onDelete={async (survey) => {
+                await deleteSurvey(gameId, hostToken, survey.number);
+                patchHost((current) => ({ ...current, surveys: current.surveys.filter((s) => s.number !== survey.number) }));
+              }}
+            />
+          </div>
+
+          <div id="fast-money">
+            <QuestionList<FastMoneyQuestion>
+              heading={`Fast Money questions (${fastMoneyQuestions.length}/${fmNeeded} needed)`}
+              intro="Quick-fire questions for the finale. Locked once Fast Money starts."
+              items={fastMoneyQuestions}
+              editorTitle="Fast Money question"
+              canEdit={() => game.status !== "FAST_MONEY" && game.status !== "FINISHED"}
+              canDelete={() => game.status !== "FAST_MONEY" && game.status !== "FINISHED"}
+              lockedTag={() => (game.status === "FAST_MONEY" || game.status === "FINISHED" ? "locked" : undefined)}
+              onSave={async (draft) => {
+                const saved = await upsertFastMoneyQuestion(gameId, hostToken, draft.number, draft.text, draft.answers);
+                patchHost((current) => ({
+                  ...current,
+                  fastMoneyQuestions: [...current.fastMoneyQuestions.filter((q) => q.number !== saved.number), saved].sort(
+                    (a, b) => a.number - b.number,
+                  ),
+                }));
+              }}
+              onDelete={async (question) => {
+                await deleteFastMoneyQuestion(gameId, hostToken, question.number);
+                patchHost((current) => ({
+                  ...current,
+                  fastMoneyQuestions: current.fastMoneyQuestions.filter((q) => q.number !== question.number),
+                }));
+              }}
+            />
+          </div>
+        </div>
+      </div>
     </main>
   );
 }

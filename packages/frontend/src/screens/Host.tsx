@@ -1,15 +1,25 @@
-// Task 2.9 — host console: lobby & roster management. Round / Fast Money UIs come in 3.6 / 4.6.
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { CopyButton } from "../components/CopyButton";
-import { HostFastMoney } from "../components/HostFastMoney";
-import { HostTokenGate } from "../components/HostTokenGate";
+import { CueDock } from "../components/host/CueDock";
+import { DisplaySheet } from "../components/host/DisplaySheet";
+import { ErrorStrip } from "../components/host/ErrorStrip";
+import { HostLobby } from "../components/host/HostLobby";
+import { HostSheet } from "../components/host/HostSheet";
+import { HostShell } from "../components/host/HostShell";
+import { KeyLegend, KeySheet } from "../components/host/KeySheet";
+import { MenuSheet } from "../components/host/MenuSheet";
+import { useSurveyChoice } from "../components/host/NextRoundPanel";
+import { PlayersPanel, type PlayerActions } from "../components/host/PlayersPanel";
+import { ShowBar } from "../components/host/ShowBar";
+import { HostFastMoney, useFastMoneyPicks } from "../components/HostFastMoney";
 import { HostRound } from "../components/HostRound";
-import { MuteToggle } from "../components/MuteToggle";
-import { RealtimeBadge } from "../components/RealtimeBadge";
-import { Roster } from "../components/Roster";
-import { TeamRename } from "../components/TeamRename";
-import { useHostGame } from "../hooks/useHostGame";
+import { HostTeamChats } from "../components/HostTeamChats";
+import { HostTokenGate } from "../components/HostTokenGate";
+import { useCountdown } from "../hooks/useCountdown";
+import { useDisplayWindow } from "../hooks/useDisplayWindow";
+import { useHostGame, type UseHostGameResult } from "../hooks/useHostGame";
+import { useHostKeys, type HostUiKeys } from "../hooks/useHostKeys";
+import { useHostRun } from "../hooks/useHostRun";
 import { useJustRevealed } from "../hooks/useJustRevealed";
 import { useSounds } from "../hooks/useSounds";
 import {
@@ -36,16 +46,15 @@ import {
   startFastMoneyTurn,
   startRound,
   strike,
-  toApiError,
   undoRoundAction,
 } from "../lib/api";
+import { canRevealIn, cueFor, fmPickKey, fmRevealView, type CueActions, type FmPick, type FmSlot } from "../lib/hostCue";
 import type { ApiGame, ApiGameUpdate } from "../lib/types";
+import "../host.css";
 
 const LOBBY_STATUSES = new Set(["LOBBY", "TEAMS_SET"]);
-
-function displayUrl(gameId: string): string {
-  return `${window.location.origin}/display/${gameId}`;
-}
+const CHATS_DOCKED = "(min-width: 1440px)";
+const EMPTY_SURVEYS: never[] = [];
 
 /** Ids for host-created test players. The prefix marks them in the roster. */
 export const TEST_PLAYER_PREFIX = "test-";
@@ -55,20 +64,32 @@ function testPlayerId(): string {
   return `${TEST_PLAYER_PREFIX}${random}`;
 }
 
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const list = window.matchMedia(query);
+    const onChange = (): void => setMatches(list.matches);
+    onChange();
+    list.addEventListener("change", onChange);
+    return () => list.removeEventListener("change", onChange);
+  }, [query]);
+  return matches;
+}
+
 export function Host() {
   const { gameId } = useParams<{ gameId: string }>();
-  const { game, host, hostToken, isHost, realtime, loading, error, lastEvent, clockOffset, applyUpdate, refreshHost } = useHostGame(gameId);
+  const live = useHostGame(gameId);
+  const { game, hostToken, isHost, loading, error, lastEvent } = live;
   const { muted, toggleMuted } = useSounds(lastEvent);
   const justRevealed = useJustRevealed(game?.currentRound);
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string>();
-  const [copied, setCopied] = useState(false);
 
   if (!gameId) {
     return (
-      <main className="page page--narrow">
-        <h1>Host Console</h1>
-        <Link to="/">Back to start</Link>
+      <main className="hx hx-center">
+        <div className="hx-panel">
+          <h1>Host Console</h1>
+          <Link to="/">Back to start</Link>
+        </div>
       </main>
     );
   }
@@ -78,38 +99,81 @@ export function Host() {
 
   if (!game) {
     return (
-      <main className="page">
-        <h1>Host Console</h1>
-        <p className="muted">{loading ? "Loading…" : (error?.message ?? "That game could not be found.")}</p>
+      <main className="hx hx-center">
+        <div className="hx-panel">
+          <h1>Host Console</h1>
+          <p className="muted">{loading ? "Loading…" : (error?.message ?? "That game could not be found.")}</p>
+        </div>
       </main>
     );
   }
 
-  const id = gameId;
-  const token = hostToken;
+  return <HostConsole gameId={gameId} token={hostToken} game={game} live={live} muted={muted} toggleMuted={toggleMuted} justRevealed={justRevealed} />;
+}
 
-  /** Run a host mutation and apply its result immediately (no need to wait for the fan-out). */
-  async function run(action: () => Promise<ApiGameUpdate>): Promise<void> {
-    setBusy(true);
-    setProblem(undefined);
-    try {
-      applyUpdate(await action());
-    } catch (cause) {
-      setProblem(toApiError(cause).message);
-    } finally {
-      setBusy(false);
-    }
-  }
+interface ConsoleProps {
+  gameId: string;
+  token: string;
+  game: ApiGame;
+  live: UseHostGameResult;
+  muted: boolean;
+  toggleMuted: () => void;
+  justRevealed: number | null;
+}
 
-  /**
-   * Seat a few stand-in players so teams, late joins and turn order can be
-   * tried from one device. They join like anyone else and never answer.
-   */
+type Sheet = "display" | "menu" | "players" | "keys";
+
+function HostConsole({ gameId: id, token, game, live, muted, toggleMuted, justRevealed }: ConsoleProps) {
+  const { host, realtime, lastEvent, clockOffset, applyUpdate, refreshHost } = live;
+
+  const runner = useHostRun({
+    applyUpdate,
+    reveal: (index) => revealAnswer(id, token, index),
+    canReveal: (index) => {
+      const round = game.currentRound;
+      const slot = round?.board[index];
+      return game.status === "ROUND_ACTIVE" && round !== null && canRevealIn(round.state) && slot !== undefined && !slot.revealed;
+    },
+  });
+  const { run, guarded, setNote } = runner;
+
+  const [sheet, setSheet] = useState<Sheet | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [unread, setUnread] = useState(0);
+  const chatsDocked = useMediaQuery(CHATS_DOCKED);
+  const display = useDisplayWindow(id);
+  const surveys = useSurveyChoice(host?.surveys ?? EMPTY_SURVEYS);
+  const picks = useFastMoneyPicks(game, (name) => setNote(`Swapped out ${name}`));
+  const fm = game.fastMoney;
+  const seconds = useCountdown(fm?.timerEndsAt, clockOffset);
+
+  const [fmSlot, setFmSlot] = useState<FmSlot>(1);
+  const [fmPick, setFmPick] = useState<FmPick | null>(null);
+  const reveal = useMemo(
+    () => (fm?.stage === "REVEAL" ? fmRevealView(game, host?.fastMoneyAnswers ?? [], host?.fastMoneyQuestions ?? [], fmSlot, fmPick) : undefined),
+    [fm?.stage, game, host, fmSlot, fmPick],
+  );
+
+  // Stay on a player until they finish, then move to the other.
+  const activeLeft = reveal?.active.next !== undefined;
+  const otherLeft = reveal?.slots[fmSlot === 1 ? 1 : 0].next !== undefined;
+  const revealLoaded = reveal !== undefined && reveal.active.total > 0;
+  const lastSeen = useRef({ slot: fmSlot, left: true });
+  useEffect(() => {
+    if (!revealLoaded) return;
+    const { slot, left } = lastSeen.current;
+    lastSeen.current = { slot: fmSlot, left: activeLeft };
+    if (slot === fmSlot && left && !activeLeft && otherLeft) setFmSlot(fmSlot === 1 ? 2 : 1);
+  }, [revealLoaded, activeLeft, otherLeft, fmSlot]);
+
+  const refreshed = (ran: Promise<boolean>): void => {
+    void ran.then((done) => {
+      if (done) refreshHost();
+    });
+  };
+
   async function addTestPlayers(count: number): Promise<void> {
-    if (!game) return;
-    setBusy(true);
-    setProblem(undefined);
-    try {
+    await guarded(async () => {
       const taken = new Set(game.players.map((player) => player.displayName.toLowerCase()));
       let next = 1;
       let last: ApiGameUpdate | undefined;
@@ -120,275 +184,162 @@ export function Host() {
         last = await joinGame(game.joinCode, testPlayerId(), name);
       }
       if (last) applyUpdate(last);
-    } catch (cause) {
-      setProblem(toApiError(cause).message);
-    } finally {
-      setBusy(false);
-    }
+      setNote(`Added ${count} test ${count === 1 ? "player" : "players"}`);
+    });
   }
 
-  async function copyDisplayLink(): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(displayUrl(id));
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Insecure context or no permission; the link is visible anyway.
-    }
-  }
+  const actions: CueActions = {
+    start: (surveyNumber) => refreshed(run(() => startRound(id, token, surveyNumber))),
+    arm: () => void run(() => armBuzzers(id, token)),
+    reset: () => void run(() => resetBuzzers(id, token)),
+    faceOff: (teamId) => void run(() => setFaceOffWinner(id, token, teamId)),
+    passOrPlay: (playingTeamId) => void run(() => choosePassOrPlay(id, token, playingTeamId)),
+    reveal: runner.queueReveal,
+    revealNext: (index) => void run(() => revealAnswer(id, token, index)),
+    strike: () => void run(() => strike(id, token)),
+    skipGuesser: () => void run(() => skipGuesser(id, token)),
+    endRound: () => void run(() => endRound(id, token)),
+    undo: () => void run(() => undoRoundAction(id, token)),
+    randomize: () => void run(() => randomizeTeams(id, token)),
+    selectPlayers: (teamId, playerIds) => void run(() => selectFastMoneyPlayers(id, token, teamId, playerIds)),
+    startTurn: (slot) => void run(() => startFastMoneyTurn(id, token, slot)),
+    endTurn: () => refreshed(run(() => endFastMoneyTurn(id, token))),
+    fmReveal: (slot, questionIndex, matchedIndex) => refreshed(run(() => revealFastMoneyAnswer(id, token, slot, questionIndex, matchedIndex))),
+    finish: () => void run(() => finishGame(id, token)),
+    fmSlot: setFmSlot,
+    fmPick: (match) => {
+      const next = reveal?.active.next;
+      if (reveal && next) setFmPick({ key: fmPickKey(reveal.active.slot, next.questionIndex), match });
+    },
+  };
+
+  const playerActions: PlayerActions = {
+    onRename: (teamId, name) => run(() => setTeamName(id, token, teamId, name)),
+    onAssign: (playerId, teamId) => run(() => assignPlayer(id, token, playerId, teamId)),
+    onReorder: (playerId, order) => run(() => reorderPlayer(id, token, playerId, order)),
+    onRemove: (playerId) => void run(() => removePlayer(id, token, playerId)),
+    onRestore: (playerId) => void run(() => restorePlayer(id, token, playerId)),
+  };
+
+  const cue = cueFor({ game, host, gameId: id, unused: surveys.unused, survey: surveys.selected, picks, reveal, seconds, actions });
+
+  const hasTeams = game.teams.length > 0;
+  const toggleChats = useCallback(() => setChatOpen((open) => !open), []);
+  const closeChats = useCallback(() => setChatOpen(false), []);
+  const ui: HostUiKeys = {
+    mute: toggleMuted,
+    display: () => setSheet("display"),
+    chats: () => {
+      if (hasTeams) toggleChats();
+    },
+    players: () => setSheet("players"),
+    keys: () => setSheet("keys"),
+    escape: closeChats,
+  };
+  useHostKeys(cue, ui, sheet !== null);
+
+  const unassigned = game.players.filter((player) => player.teamId === null).length;
+  const lobby = LOBBY_STATUSES.has(game.status);
+  const strip = <ErrorStrip problem={runner.problem} note={runner.note} onDismiss={runner.clearProblem} onDismissNote={runner.clearNote} />;
+  const closeSheet = (): void => setSheet(null);
+  const chatsVisible = chatsDocked || chatOpen;
 
   return (
-    <main className="page">
-      <header className="page__header">
-        <h1>Host Console</h1>
-        <nav className="page__nav">
-          <Link className="button button--small" to={`/host/${id}/setup`}>
-            Setup
-          </Link>
-          <a className="button button--small" href={displayUrl(id)} target="_blank" rel="noreferrer">
-            Open display
-          </a>
-          <button className="button button--small button--ghost" type="button" onClick={copyDisplayLink}>
-            {copied ? "Copied" : "Copy display link"}
-          </button>
-          <CopyButton value={hostToken} label="Copy host token" />
-          <MuteToggle muted={muted} onToggle={toggleMuted} />
-          <RealtimeBadge status={realtime} />
-        </nav>
-      </header>
-
-      {problem && <p className="field-error">{problem}</p>}
-
-      {game.status === "TEAMS_SET" && (
-        <HostRound
+    <HostShell
+      bar={
+        <ShowBar
+          game={game}
+          gameId={id}
+          realtime={realtime}
+          muted={muted}
+          unread={unread}
+          unassigned={hasTeams ? unassigned : 0}
+          onToggleMuted={toggleMuted}
+          onDisplay={ui.display}
+          onChats={toggleChats}
+          onPlayers={ui.players}
+          onMenu={() => setSheet("menu")}
+        />
+      }
+      dock={<CueDock cue={cue} busy={runner.busy} showBar={runner.showBar} flashKey={runner.flashKey} strip={strip} />}
+      legend={<KeyLegend cue={cue} hasTeams={hasTeams} />}
+      hasChats={hasTeams}
+      chats={
+        hasTeams && (
+          // Never unmounted: each team's socket lives in here.
+          <aside className="hx-chats" aria-label="Team chats" data-open={chatOpen ? "" : undefined} {...(chatsVisible ? {} : { inert: "" })}>
+            <HostTeamChats gameId={id} teams={game.teams} clockOffset={clockOffset} visible={chatsVisible} onUnread={setUnread} onClose={closeChats} />
+          </aside>
+        )
+      }
+      sheets={
+        <>
+          {sheet === "display" && <DisplaySheet display={display} strip={strip} onClose={closeSheet} />}
+          {sheet === "menu" && (
+            <MenuSheet
+              gameId={id}
+              hostToken={token}
+              muted={muted}
+              unassigned={hasTeams ? unassigned : 0}
+              strip={strip}
+              onToggleMuted={toggleMuted}
+              onPlayers={ui.players}
+              onKeys={ui.keys}
+              onClose={closeSheet}
+            />
+          )}
+          {sheet === "keys" && <KeySheet onClose={closeSheet} />}
+          {sheet === "players" && (
+            <HostSheet title="Players" wide strip={strip} onClose={closeSheet}>
+              {hasTeams ? <PlayersPanel game={game} mode={lobby ? "lobby" : "live"} busy={runner.busy} {...playerActions} /> : <p className="hx-note">Teams appear here once they are drawn.</p>}
+            </HostSheet>
+          )}
+        </>
+      }
+    >
+      {lobby ? (
+        <HostLobby
           gameId={id}
           game={game}
-          surveys={host?.surveys ?? []}
-          fullBoard={[]}
-          fullQuestion={null}
-          busy={busy}
-          lastEventKey={null}
-          lastEventName={undefined}
-          justRevealed={null}
-          actions={{
-            startRound: (surveyNumber) => run(() => startRound(id, token, surveyNumber)).then(refreshHost),
-            skipContestant: () => undefined,
-            armBuzzers: () => undefined,
-            resetBuzzers: () => undefined,
-            revealAnswer: () => undefined,
-            strike: () => undefined,
-            setFaceOffWinner: () => undefined,
-            choosePassOrPlay: () => undefined,
-            skipGuesser: () => undefined,
-            endRound: () => undefined,
-            undo: () => undefined,
-          }}
-        />
-      )}
-
-      {LOBBY_STATUSES.has(game.status) ? (
-        <Lobby
-          game={game}
-          busy={busy}
+          busy={runner.busy}
           surveysReady={host ? host.surveys.length : undefined}
-          onRandomize={() => run(() => randomizeTeams(id, token))}
-          onRename={(teamId, name) => run(() => setTeamName(id, token, teamId, name))}
-          onAssign={(playerId, teamId) => run(() => assignPlayer(id, token, playerId, teamId))}
-          onReorder={(playerId, order) => run(() => reorderPlayer(id, token, playerId, order))}
-          onRemove={(playerId) => run(() => removePlayer(id, token, playerId))}
-          onRestore={(playerId) => run(() => restorePlayer(id, token, playerId))}
+          surveys={surveys}
+          display={display}
+          onRandomize={actions.randomize}
           onAddTestPlayers={addTestPlayers}
+          {...playerActions}
         />
       ) : game.status === "ROUND_ACTIVE" ? (
         <HostRound
           gameId={id}
           game={game}
-          surveys={host?.surveys ?? []}
-          fullBoard={host?.currentBoard ?? []}
-          fullQuestion={host?.currentQuestion ?? null}
-          busy={busy}
-          lastEventKey={lastEvent?.serverTime ?? null}
-          lastEventName={lastEvent?.event}
+          host={host}
+          surveys={surveys}
+          pendingReveals={runner.pendingReveals}
           justRevealed={justRevealed}
-          actions={{
-            startRound: (surveyNumber) => run(() => startRound(id, token, surveyNumber)).then(refreshHost),
-            skipContestant: (teamId) => run(() => skipContestant(id, token, teamId)),
-            armBuzzers: () => run(() => armBuzzers(id, token)),
-            resetBuzzers: () => run(() => resetBuzzers(id, token)),
-            revealAnswer: (index) => run(() => revealAnswer(id, token, index)),
-            strike: () => run(() => strike(id, token)),
-            setFaceOffWinner: (teamId) => run(() => setFaceOffWinner(id, token, teamId)),
-            choosePassOrPlay: (playingTeamId) => run(() => choosePassOrPlay(id, token, playingTeamId)),
-            skipGuesser: () => run(() => skipGuesser(id, token)),
-            endRound: () => run(() => endRound(id, token)),
-            undo: () => run(() => undoRoundAction(id, token)),
-          }}
+          strikeFlashKey={lastEvent?.event === "STRIKE" ? lastEvent.serverTime : null}
+          onReveal={actions.reveal}
+          onSkipContestant={(teamId) => void run(() => skipContestant(id, token, teamId))}
         />
       ) : (
         <HostFastMoney
+          gameId={id}
           game={game}
           questions={host?.fastMoneyQuestions ?? []}
           answers={host?.fastMoneyAnswers ?? []}
-          clockOffset={clockOffset}
-          busy={busy}
+          picks={picks}
+          reveal={reveal}
           onPoll={refreshHost}
-          actions={{
-            selectPlayers: (teamId, playerIds) => run(() => selectFastMoneyPlayers(id, token, teamId, playerIds)),
-            startTurn: (slot) => run(() => startFastMoneyTurn(id, token, slot)),
-            endTurn: () => run(() => endFastMoneyTurn(id, token)).then(refreshHost),
-            buzzDuplicate: async (questionIndex) => {
-              setBusy(true);
-              setProblem(undefined);
-              try {
-                await buzzDuplicate(id, token, questionIndex);
-                refreshHost();
-              } catch (cause) {
-                setProblem(toApiError(cause).message);
-              } finally {
-                setBusy(false);
-              }
-            },
-            reveal: (slot, questionIndex, matchedIndex) => run(() => revealFastMoneyAnswer(id, token, slot, questionIndex, matchedIndex)).then(refreshHost),
-            finish: () => run(() => finishGame(id, token)),
-          }}
+          onBuzzDuplicate={(questionIndex) =>
+            void guarded(async () => {
+              await buzzDuplicate(id, token, questionIndex);
+              refreshHost();
+            })
+          }
+          onRevealSlot={actions.fmSlot}
+          onRevealPick={actions.fmPick}
         />
       )}
-    </main>
-  );
-}
-
-interface LobbyProps {
-  game: ApiGame;
-  busy: boolean;
-  surveysReady: number | undefined;
-  onRandomize: () => void;
-  onRename: (teamId: string, name: string) => Promise<void>;
-  onAssign: (playerId: string, teamId: string) => void;
-  onReorder: (playerId: string, newOrder: number) => void;
-  onRemove: (playerId: string) => void;
-  onRestore: (playerId: string) => void;
-  onAddTestPlayers: (count: number) => Promise<void>;
-}
-
-function Lobby({ game, busy, surveysReady, onRandomize, onRename, onAssign, onReorder, onRemove, onRestore, onAddTestPlayers }: LobbyProps) {
-  const teamsSet = game.teams.length > 0;
-  const unassigned = game.players.filter((player) => player.teamId === null);
-  const active = game.players.filter((player) => player.active);
-  const [testCount, setTestCount] = useState("4");
-  const testCountNumber = Math.min(20, Math.max(1, Number.parseInt(testCount, 10) || 0));
-
-  return (
-    <>
-      <section className="card">
-        <div className="page__header">
-          <div>
-            <span className="label">Join code</span>
-            <div className="display__code-value" style={{ fontSize: "clamp(2rem, 8vw, 4rem)" }}>
-              {game.joinCode}
-            </div>
-            <span className="muted small">
-              {game.players.length} joined · {active.length} active
-              {surveysReady !== undefined && ` · ${surveysReady}/${game.config.roundCount} surveys written`}
-            </span>
-          </div>
-          <div className="button-row">
-            <button className="button button--primary" type="button" disabled={busy || active.length < 2} onClick={onRandomize}>
-              {teamsSet ? "Re-draw teams" : "Randomize teams"}
-            </button>
-          </div>
-        </div>
-        {teamsSet && unassigned.length === 0 && (
-          <p className="muted small">Teams are set. Start round 1 below when everyone is ready.</p>
-        )}
-      </section>
-
-      {!teamsSet && (
-        <section>
-          <h2>Players arriving</h2>
-          {game.players.length === 0 ? (
-            <p className="muted">Nobody has joined yet. Share the code above.</p>
-          ) : (
-            <div className="chips">
-              {game.players.map((player) => (
-                <span key={player.id} className="chip">
-                  {player.displayName}
-                </span>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      {teamsSet && unassigned.length > 0 && (
-        <section>
-          <h2>Unassigned ({unassigned.length})</h2>
-          <p className="muted small">Late joiners land here. Assign them to a team; they go to the bottom of that team's order.</p>
-          <ul className="roster">
-            {unassigned.map((player) => (
-              <li key={player.id} className="roster__item">
-                <span className="roster__name">{player.displayName}</span>
-                <div className="roster__actions">
-                  {game.teams.map((team) => (
-                    <button
-                      key={team.id}
-                      className="button button--small"
-                      type="button"
-                      disabled={busy}
-                      onClick={() => onAssign(player.id, team.id)}
-                    >
-                      → {team.name}
-                    </button>
-                  ))}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {teamsSet && (
-        <section className="grid-2">
-          {game.teams.map((team) => (
-            <div className="card" key={team.id}>
-              <TeamRename name={team.name} busy={busy} onRename={(name) => onRename(team.id, name)} />
-              <p className="muted small">Turn order, top to bottom. Drag or use the arrows to reorder.</p>
-              <Roster
-                team={team}
-                otherTeams={game.teams.filter((other) => other.id !== team.id)}
-                busy={busy}
-                onReorder={onReorder}
-                onMove={onAssign}
-                onRemove={onRemove}
-                onRestore={onRestore}
-              />
-            </div>
-          ))}
-        </section>
-      )}
-
-      <section className="card test-players">
-        <h3>Test players</h3>
-        <p className="muted small">
-          Add stand-in players to try teams, late joins and turn order from one device. They sit in the roster
-          like real players but never buzz or answer; use Skip in a round to move past them.
-        </p>
-        <div className="field field--row">
-          <input
-            className="input input--small input--count"
-            type="number"
-            min={1}
-            max={20}
-            inputMode="numeric"
-            aria-label="Number of test players"
-            value={testCount}
-            onChange={(event) => setTestCount(event.target.value)}
-            disabled={busy}
-          />
-          <button className="button button--small" type="button" disabled={busy || testCountNumber < 1} onClick={() => onAddTestPlayers(testCountNumber)}>
-            Add {testCountNumber} test {testCountNumber === 1 ? "player" : "players"}
-          </button>
-        </div>
-      </section>
-    </>
+    </HostShell>
   );
 }

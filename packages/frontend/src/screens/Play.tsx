@@ -1,96 +1,69 @@
-// Task 2.9 — player lobby view. Round / Fast Money controls come in 3.8 / 4.7.
-import { Link, useParams } from "react-router-dom";
-import { useEffect, useRef, useState } from "react";
-import { MuteToggle } from "../components/MuteToggle";
+// The player's phone: one shell, one cue, whatever the game is doing.
+import { useParams } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { PlayBar } from "../components/play/PlayBar";
+import { BuzzStage } from "../components/play/BuzzStage";
+import { PlayerLobby } from "../components/play/PlayerLobby";
+import { PlayShell } from "../components/play/PlayShell";
+import { TurnDock } from "../components/play/TurnDock";
 import { PlayFastMoney } from "../components/PlayFastMoney";
-import { DisplayFastMoney } from "../components/DisplayFastMoney";
-import { DisplayRound } from "../components/DisplayRound";
 import { PlayRound } from "../components/PlayRound";
-import { RealtimeBadge } from "../components/RealtimeBadge";
+import { Finale } from "../components/show/Finale";
+import { MomentLayer } from "../components/show/MomentLayer";
+import { TeamChat } from "../components/TeamChat";
+import { TvStage } from "../components/tv/TvStage";
+import { useBuzzVerdict } from "../hooks/useBuzzVerdict";
+import { useFreshReveals } from "../hooks/useFreshReveals";
 import { useGame } from "../hooks/useGame";
-import { useJustRevealed } from "../hooks/useJustRevealed";
 import { useJustRevealedFastMoney } from "../hooks/useJustRevealedFastMoney";
-import { LobbyDisplay, TeamsDisplay } from "./Display";
+import { useMoments } from "../hooks/useMoments";
+import { usePlayerCues } from "../hooks/usePlayerCues";
 import { usePlayerMessages } from "../hooks/usePlayerMessages";
 import { useSounds } from "../hooks/useSounds";
+import { useVisualViewport } from "../hooks/useVisualViewport";
+import { useWakeLock } from "../hooks/useWakeLock";
 import { buzz, joinGame, toApiError } from "../lib/api";
+import { otherTeam, teamOfPlayer } from "../lib/gameHelpers";
+import { buzzPhone } from "../lib/haptics";
 import { getDisplayName, getLastGame, getPlayerId, setLastGame } from "../lib/identity";
-import type { ApiGame } from "../lib/types";
+import { barState, playerCue, spectatorCue } from "../lib/playerCue";
+import type { ApiGameUpdate } from "../lib/types";
+import { TvShow } from "./Display";
 
-function PlayerLobby({ game, me }: { game: ApiGame; me: string }) {
-  const self = game.players.find((player) => player.id === me);
-  const myTeam = game.teams.find((team) => team.players.some((player) => player.id === me));
-  const teamsSet = game.teams.length > 0;
-
-  if (!self) {
-    return (
-      <p className="notice">
-        You're not in this game on this device. <Link to={`/?code=${game.joinCode}`}>Join with the code {game.joinCode}</Link>.
-      </p>
-    );
-  }
-
-  return (
-    <>
-      <section className="card">
-        <p>
-          You're in as <strong>{self.displayName}</strong>
-          {!self.active && <span className="tag">removed by host</span>}
-        </p>
-        {!teamsSet && <p className="muted">Waiting for the host to make teams… {game.players.length} here so far.</p>}
-        {teamsSet && !myTeam && <p className="muted">Teams are set — the host will slot you in.</p>}
-        {myTeam && (
-          <p>
-            You're on <strong>{myTeam.name}</strong>
-            <span className="tag tag--gold">#{myTeam.players.filter((p) => p.active).findIndex((p) => p.id === me) + 1} in the order</span>
-          </p>
-        )}
-      </section>
-
-      {!teamsSet && (
-        <section className="chips">
-          {game.players.map((player) => (
-            <span key={player.id} className="chip">
-              {player.displayName}
-            </span>
-          ))}
-        </section>
-      )}
-
-      {teamsSet && (
-        <section className="grid-2">
-          {game.teams.map((team) => (
-            <div className="card" key={team.id}>
-              <h3>{team.name}</h3>
-              <ol className="roster">
-                {team.players
-                  .filter((player) => player.active)
-                  .map((player, index) => (
-                    <li key={player.id} className={`roster__item${player.id === me ? " roster__item--me" : ""}`}>
-                      <span className="roster__order">{index + 1}</span>
-                      <span className="roster__name">{player.displayName}</span>
-                    </li>
-                  ))}
-              </ol>
-            </div>
-          ))}
-        </section>
-      )}
-    </>
-  );
-}
+const TOAST_MS = 2500;
+const DUPLICATE_TOAST_MS = 3000;
+/** A BUZZ_RESULT can land just before the state that proves it, so give the verdict a beat to speak first. */
+const VERDICT_GRACE_MS = 400;
 
 export function Play() {
   const { gameId } = useParams<{ gameId: string }>();
   const { game, realtime, loading, error, lastEvent, clockOffset, applyUpdate } = useGame(gameId);
   const me = getPlayerId();
   const { last: lastMessage } = usePlayerMessages(gameId, me);
-  const { muted, toggleMuted } = useSounds(lastEvent);
-  const justRevealed = useJustRevealed(game?.currentRound);
+  const ownBuzz = useRef<ApiGameUpdate>();
+  // A mutation response and its broadcast both arrive here, so the buzzing phone would hear BUZZ twice.
+  const { muted, toggleMuted } = useSounds(lastEvent === ownBuzz.current ? undefined : lastEvent);
+  const keyboardUp = useVisualViewport(true);
+  const round = game?.currentRound;
+  const { verdict, shownForRound } = useBuzzVerdict(round, me);
+  const fresh = useFreshReveals(round);
   const justRevealedFm = useJustRevealedFastMoney(game?.fastMoney);
-  const [buzzing, setBuzzing] = useState(false);
+  const moment = useMoments(game, lastEvent, false);
   const [problem, setProblem] = useState<string>();
+  const [toast, setToast] = useState<{ text: string; ms: number }>();
+  const [chatOpenTeam, setChatOpenTeam] = useState<string>();
   const rejoinTried = useRef(false);
+  const armKey = useRef<number>();
+  const roundNumber = useRef<number>();
+  roundNumber.current = round?.number;
+
+  const isMember = game?.players.some((player) => player.id === me) ?? false;
+  const canRejoin = Boolean(getLastGame()?.gameId === gameId ? getLastGame()?.displayName : getDisplayName());
+  const spectating = game !== undefined && !isMember && !canRejoin;
+  const cue = game ? (spectating ? spectatorCue(game) : playerCue(game, me)) : undefined;
+  const splash = usePlayerCues(spectating ? undefined : cue);
+
+  useWakeLock(game !== undefined && game.status !== "FINISHED");
 
   /**
    * Resume: if this browser joined this game before (or has a name on file),
@@ -107,96 +80,131 @@ export function Play() {
     joinGame(game.joinCode, me, name)
       .then((update) => {
         setLastGame({ gameId, joinCode: game.joinCode, displayName: name });
+        setProblem(undefined);
         applyUpdate(update);
       })
       .catch((cause: unknown) => setProblem(toApiError(cause).message));
   }, [game, gameId, me, applyUpdate]);
 
-  async function onBuzz(): Promise<void> {
-    if (!gameId) return;
-    setBuzzing(true);
+  const showToast = useCallback((text: string, ms = TOAST_MS) => setToast({ text, ms }), []);
+  const showDuplicateToast = useCallback((text: string) => showToast(text, DUPLICATE_TOAST_MS), [showToast]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(undefined), toast.ms);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  // Private messages become short toasts; the board itself follows the broadcast.
+  useEffect(() => {
+    if (lastMessage?.type === "REMOVED") showToast("The host has removed you from the rotation.");
+    if (lastMessage?.type !== "BUZZ_RESULT") return;
+    const text = lastMessage.detail === "WON" ? "You buzzed first!" : "Too slow — the other side buzzed first.";
+    const timer = window.setTimeout(() => {
+      if (shownForRound.current !== roundNumber.current) showToast(text);
+    }, VERDICT_GRACE_MS);
+    return () => window.clearTimeout(timer);
+  }, [lastMessage, showToast, shownForRound]);
+
+  const verdictKey = verdict ? `${verdict.winnerId}-${round?.number}` : undefined;
+  useEffect(() => {
+    if (verdictKey && verdict?.won) buzzPhone(60);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verdictKey]);
+
+  const strikeKey = moment?.moment.kind === "strike" ? moment.key : undefined;
+  useEffect(() => {
+    if (!strikeKey || !game?.currentRound) return;
+    const current = game.currentRound;
+    const inPlay = current.state === "STEAL" ? otherTeam(game, current.playingTeamId)?.id : current.playingTeamId;
+    if (teamOfPlayer(game, me)?.id === inPlay) buzzPhone(200);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [strikeKey]);
+
+  async function onBuzz(): Promise<boolean> {
+    if (!gameId) return false;
+    setProblem(undefined);
     try {
-      applyUpdate(await buzz(gameId, me));
+      const update = await buzz(gameId, me);
+      ownBuzz.current = update;
+      applyUpdate(update);
+      return true;
     } catch (cause) {
       setProblem(toApiError(cause).message);
-    } finally {
-      setBuzzing(false);
+      return false;
     }
   }
 
+  const bar = <PlayBar state={game ? barState(game) : undefined} muted={muted} onToggleMuted={toggleMuted} realtime={realtime} />;
+
   if (!game) {
     return (
-      <main className="page page--narrow">
-        <h1>Family Feud</h1>
-        <p className="muted">{loading ? "Loading…" : (error?.message ?? "That game could not be found.")}</p>
-      </main>
+      <PlayShell bar={bar} chatState="none" keyboardUp={keyboardUp}>
+        <p className="sx-waiting">{loading ? "Loading…" : (error?.message ?? "That game could not be found.")}</p>
+      </PlayShell>
     );
   }
 
-  const isMember = game.players.some((player) => player.id === me);
-  const canRejoin = Boolean(getLastGame()?.gameId === gameId ? getLastGame()?.displayName : getDisplayName());
+  const announce = moment?.moment.kind === "strike" ? `Strike ${moment.moment.blades} of ${game.config.strikesToSteal}` : cue?.headline;
+  const moments = <MomentLayer current={moment} splash={splash} />;
+  const dock = cue && !cue.noDock ? cue : undefined;
 
   // Spectator: not on the roster and nothing to rejoin with. Show the same
   // board the display shows, read-only, with a way in.
-  if (!isMember && !canRejoin) {
+  if (spectating) {
     return (
-      <main className="page page--narrow">
-        <header className="page__header">
-          <h1>Family Feud</h1>
-          <nav className="page__nav">
-            <MuteToggle muted={muted} onToggle={toggleMuted} />
-            <RealtimeBadge status={realtime} />
-          </nav>
-        </header>
-        <p className="notice">
-          You're watching. {game.status !== "FINISHED" && <Link to={`/?code=${game.joinCode}`}>Join with code {game.joinCode}</Link>}
-        </p>
-        {game.status === "LOBBY" && <LobbyDisplay game={game} />}
-        {game.status === "TEAMS_SET" && <TeamsDisplay game={game} />}
-        {game.status === "ROUND_ACTIVE" && game.currentRound && (
-          <DisplayRound game={game} round={game.currentRound} lastEventKey={lastEvent?.serverTime ?? null} lastEventName={lastEvent?.event} justRevealed={justRevealed} />
-        )}
-        {(game.status === "FAST_MONEY" || game.status === "FINISHED") && <DisplayFastMoney game={game} clockOffset={clockOffset} justRevealed={justRevealedFm} />}
-      </main>
+      <PlayShell bar={bar} dock={dock && <TurnDock cue={dock} />} chatState="none" keyboardUp={keyboardUp} toast={toast?.text} announce={announce}>
+        <TvStage game={game} lastEvent={lastEvent} embedded realtime={realtime}>
+          <TvShow game={game} lastEvent={lastEvent} clockOffset={clockOffset} embedded />
+        </TvStage>
+      </PlayShell>
     );
   }
 
+  const self = game.players.find((player) => player.id === me);
+  const chatTeamId = (self?.active && self.teamId) || undefined;
+  const chatOpen = chatTeamId !== undefined && chatOpenTeam === chatTeamId;
+  const armedHere = round !== null && round !== undefined && game.status === "ROUND_ACTIVE" && round.contestantPlayerIds.includes(me) && (round.state === "FACE_OFF_ARMED" || verdict !== null);
+  if (lastEvent?.event === "BUZZERS_ARMED" || lastEvent?.event === "BUZZERS_RESET") armKey.current = lastEvent.serverTime;
+  const openChat = chatTeamId && !chatOpen ? () => setChatOpenTeam(chatTeamId) : undefined;
+  const strip = problem && !armedHere && (
+    <p className="sx-strip sx-strip--ember">
+      <span>{problem}</span>
+      <button className="sx-strip__close" type="button" aria-label="Dismiss" onClick={() => setProblem(undefined)}>
+        ×
+      </button>
+    </p>
+  );
+
   return (
-    <main className="page page--narrow">
-      <header className="page__header">
-        <h1>Family Feud</h1>
-        <nav className="page__nav">
-          <MuteToggle muted={muted} onToggle={toggleMuted} />
-          <RealtimeBadge status={realtime} />
-        </nav>
-      </header>
-      {problem && <p className="field-error">{problem}</p>}
+    <PlayShell
+      bar={bar}
+      dock={dock && <TurnDock cue={dock} onOpenChat={openChat} />}
+      chat={
+        chatTeamId && gameId ? (
+          <TeamChat key={chatTeamId} gameId={gameId} teamId={chatTeamId} game={game} me={me} clockOffset={clockOffset} open={chatOpen} keyboardUp={keyboardUp} onOpenTeamChange={setChatOpenTeam} />
+        ) : undefined
+      }
+      chatState={!chatTeamId ? "none" : chatOpen ? "open" : "closed"}
+      keyboardUp={keyboardUp}
+      myTurn={cue?.mine && cue.pulse && cue.mood === "gold"}
+      toast={toast?.text}
+      announce={announce}
+      moments={moments}
+      overlay={
+        armedHere && round ? (
+          <BuzzStage game={game} round={round} verdict={verdict} armKey={armKey.current} problem={problem} onDismissProblem={() => setProblem(undefined)} onBuzz={onBuzz} realtime={realtime} muted={muted} onToggleMuted={toggleMuted} />
+        ) : undefined
+      }
+    >
+      {strip}
       {(game.status === "LOBBY" || game.status === "TEAMS_SET") && <PlayerLobby game={game} me={me} />}
-      {game.status === "ROUND_ACTIVE" && game.currentRound && (
-        <PlayRound
-          game={game}
-          round={game.currentRound}
-          me={me}
-          lastEventKey={lastEvent?.serverTime ?? null}
-          lastEventName={lastEvent?.event}
-          justRevealed={justRevealed}
-          lastMessage={lastMessage}
-          buzzing={buzzing}
-          onBuzz={onBuzz}
-        />
+      {game.status === "ROUND_ACTIVE" && round && <PlayRound game={game} round={round} me={me} fresh={fresh} />}
+      {game.status === "ROUND_ACTIVE" && !round && <PlayerLobby game={game} me={me} />}
+      {game.status === "FAST_MONEY" && gameId && (
+        <PlayFastMoney gameId={gameId} game={game} me={me} clockOffset={clockOffset} lastEvent={lastEvent} lastMessage={lastMessage} justRevealed={justRevealedFm} onToast={showDuplicateToast} />
       )}
-      {game.status === "ROUND_ACTIVE" && !game.currentRound && <PlayerLobby game={game} me={me} />}
-      {(game.status === "FAST_MONEY" || game.status === "FINISHED") && gameId && (
-        <PlayFastMoney
-          gameId={gameId}
-          game={game}
-          me={me}
-          clockOffset={clockOffset}
-          lastEvent={lastEvent}
-          lastMessage={lastMessage}
-          justRevealed={justRevealedFm}
-        />
-      )}
-    </main>
+      {game.status === "FINISHED" && <Finale game={game} me={me} celebrate={lastEvent?.event === "GAME_FINISHED"} />}
+    </PlayShell>
   );
 }

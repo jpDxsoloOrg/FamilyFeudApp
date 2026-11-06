@@ -8,6 +8,7 @@ const handlers: Record<string, Handler> = {
   game: h.game,
   hostGame: h.hostGame,
   fastMoneyView: h.fastMoneyView,
+  teamMessages: h.teamMessages,
   // lobby & roster
   createGame: h.createGame,
   joinGame: h.joinGame,
@@ -46,6 +47,7 @@ const handlers: Record<string, Handler> = {
   revealFastMoneyAnswer: h.revealFastMoneyAnswer,
   finishGame: h.finishGame,
   sendPlayerMessage: h.sendPlayerMessage,
+  sendTeamMessage: h.sendTeamMessage,
 };
 
 export async function handler(event: AppSyncResolverEvent<Record<string, unknown>>): Promise<unknown> {

@@ -5,23 +5,27 @@ interface Props {
   label: string;
   copiedLabel?: string;
   className?: string;
+  onFail?: () => void;
 }
 
-/** Copies `value` to the clipboard; falls back silently when the clipboard is unavailable. */
-export function CopyButton({ value, label, copiedLabel = "Copied", className = "button button--small button--ghost" }: Props) {
-  const [copied, setCopied] = useState(false);
+const FEEDBACK_MS = 2000;
+
+/** Copies `value` to the clipboard and says so either way. */
+export function CopyButton({ value, label, copiedLabel = "Copied", className = "button button--small button--ghost", onFail }: Props) {
+  const [result, setResult] = useState<"copied" | "failed">();
   async function copy(): Promise<void> {
     try {
       await navigator.clipboard.writeText(value);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
+      setResult("copied");
     } catch {
-      // Insecure context or no permission; the value is visible elsewhere.
+      setResult("failed");
+      onFail?.();
     }
+    window.setTimeout(() => setResult(undefined), FEEDBACK_MS);
   }
   return (
     <button className={className} type="button" onClick={copy}>
-      {copied ? copiedLabel : label}
+      {result === "copied" ? copiedLabel : result === "failed" ? "Couldn't copy" : label}
     </button>
   );
 }

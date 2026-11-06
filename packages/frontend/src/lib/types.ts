@@ -84,6 +84,17 @@ export interface ApiPlayerMessage {
   serverTime: number;
 }
 
+/** The schema's `TeamMessage`. `sentAt` is server time in milliseconds. */
+export interface ApiTeamMessage {
+  gameId: string;
+  teamId: string;
+  id: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  sentAt: number;
+}
+
 export interface ApiFastMoneyPrompt {
   questionIndex: number;
   text: string;

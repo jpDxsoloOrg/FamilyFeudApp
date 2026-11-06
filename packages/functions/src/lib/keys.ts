@@ -19,6 +19,10 @@ export function gamePk(gameId: string): string {
   return `GAME#${gameId}`;
 }
 
+export function chatPk(gameId: string, teamId: string): string {
+  return `CHAT#${gameId}#${teamId}`;
+}
+
 export const keys = {
   game: (gameId: string): TableKey => ({ pk: gamePk(gameId), sk: "META" }),
   player: (gameId: string, playerId: string): TableKey => ({
@@ -36,6 +40,11 @@ export const keys = {
     pk: gamePk(gameId),
     sk: `FMRESP#${slot}#${pad(n)}`,
   }),
+  // Chat lives outside GAME# so loadGame never reads it.
+  teamMessage: (gameId: string, teamId: string, sentAt: number, id: string): TableKey => ({
+    pk: chatPk(gameId, teamId),
+    sk: `MSG#${String(sentAt).padStart(15, "0")}#${id}`,
+  }),
   joinCode: (code: string): TableKey => ({ pk: `JOIN#${code.toUpperCase()}`, sk: "GAME" }),
 };
 
@@ -47,6 +56,7 @@ export const prefixes = {
   rounds: "ROUND#",
   fastMoneyQuestions: "FMQ#",
   fastMoneyResponses: "FMRESP#",
+  teamMessages: "MSG#",
 } as const;
 
 /** Pull the id out of a key such as `PLAYER#<id>`, failing loudly on a malformed key. */

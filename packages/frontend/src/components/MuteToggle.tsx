@@ -1,6 +1,8 @@
 interface Props {
   muted: boolean;
   onToggle: () => void;
+  /** One fixed name, so pressed reads as muted. */
+  stableLabel?: boolean;
 }
 
 const SpeakerIcon = ({ muted }: { muted: boolean }) => (
@@ -20,9 +22,9 @@ const SpeakerIcon = ({ muted }: { muted: boolean }) => (
   </svg>
 );
 
-export function MuteToggle({ muted, onToggle }: Props) {
+export function MuteToggle({ muted, onToggle, stableLabel }: Props) {
   return (
-    <button className="button button--small button--ghost button--icon-text" type="button" onClick={onToggle} aria-pressed={muted} title={muted ? "Unmute sounds" : "Mute sounds"}>
+    <button className="button button--small button--ghost button--icon-text" type="button" onClick={onToggle} aria-pressed={muted} aria-label={stableLabel ? "Mute sounds" : undefined} title={muted ? "Unmute sounds" : "Mute sounds"}>
       <SpeakerIcon muted={muted} />
       <span>{muted ? "Muted" : "Sound"}</span>
     </button>

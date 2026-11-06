@@ -51,3 +51,15 @@ export const ROUND_STATE_LABEL: Record<PublicRound["state"], string> = {
   REVEAL_REMAINING: "Round over",
   ENDED: "Round ended",
 };
+
+export interface FinalResult {
+  tied: boolean;
+  winner: ApiTeam | undefined;
+}
+
+/** Who finished ahead on team scores. */
+export function finalResult(game: ApiGame): FinalResult {
+  const [left, right] = game.teams;
+  const tied = Boolean(left && right && left.score === right.score);
+  return { tied, winner: [...game.teams].sort((a, b) => b.score - a.score)[0] };
+}
