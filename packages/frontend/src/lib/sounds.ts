@@ -1,14 +1,16 @@
 /**
- * Task 3.9 — sound effects synthesised with WebAudio, plus the buzz-in and strike clips.
+ * Task 3.9 — sound effects synthesised with WebAudio, plus the game's recorded clips.
  * Browsers block audio until a user gesture, so `unlock()` is called on the
  * first tap/keypress and everything before that is silently dropped.
  */
 import buzzClipUrl from "../assets/buzzer.mp3";
+import clangClipUrl from "../assets/clang.wav";
+import duplicateClipUrl from "../assets/duplicate.wav";
 import strikeClipUrl from "../assets/wrong.mp3";
 
 const MUTE_KEY = "familyfeud.muted";
 
-export type SoundName = "buzz" | "ding" | "strike" | "win" | "armed" | "press" | "yourTurn" | "tick" | "timeUp" | "nope" | "sting" | "steal" | "join" | "fanfare";
+export type SoundName = "buzz" | "clang" | "duplicate" | "ding" | "strike" | "win" | "armed" | "press" | "yourTurn" | "tick" | "timeUp" | "nope" | "sting" | "steal" | "join" | "fanfare";
 
 let context: AudioContext | undefined;
 let unlocked = false;
@@ -139,10 +141,12 @@ export function scheduleTones(ctx: BaseAudioContext, now: number, tones: Tone[])
   }
 }
 
-/** Both clips are quiet as recorded, so each gets its own boost. */
+/** Each clip gets its own gain, so they land at a similar level. */
 const CLIPS = {
   buzz: { url: buzzClipUrl, gain: 2.5 },
   strike: { url: strikeClipUrl, gain: 2.8 },
+  clang: { url: clangClipUrl, gain: 0.7 },
+  duplicate: { url: duplicateClipUrl, gain: 2 },
 } as const;
 type ClipName = keyof typeof CLIPS;
 
@@ -197,13 +201,23 @@ const buzzIn: Tone[] = Array.from({ length: BUZZ_IN_PULSES }, (_, i) => [
   { frequency: 1760, duration: 0.05, type: "triangle" as const, gain: 0.36, at: i * BUZZ_IN_GAP },
 ]).flat();
 
+/** Two-tone chime. */
+const ding: Tone[] = [
+  { frequency: 880, duration: 0.25, gain: 0.25 },
+  { frequency: 1318, duration: 0.5, gain: 0.25, at: 0.12 },
+];
+
+const nope: Tone[] = [
+  { frequency: 262, duration: 0.1, type: "square", gain: 0.16 },
+  { frequency: 208, duration: 0.16, type: "square", gain: 0.16, at: 0.12 },
+];
+
 export const SOUNDS: Record<Exclude<SoundName, keyof typeof BUZZERS>, Tone[]> = {
   buzz: buzzIn,
-  // Two-tone chime.
-  ding: [
-    { frequency: 880, duration: 0.25, gain: 0.25 },
-    { frequency: 1318, duration: 0.5, gain: 0.25, at: 0.12 },
-  ],
+  ding,
+  clang: ding,
+  nope,
+  duplicate: nope,
   // Rising arpeggio.
   win: [
     { frequency: 523, duration: 0.2 },
@@ -229,10 +243,6 @@ export const SOUNDS: Record<Exclude<SoundName, keyof typeof BUZZERS>, Tone[]> = 
   timeUp: [
     { frequency: 440, duration: 0.25, type: "sawtooth", gain: 0.22 },
     { frequency: 294, duration: 0.5, type: "sawtooth", gain: 0.22, at: 0.22, slideTo: 220 },
-  ],
-  nope: [
-    { frequency: 262, duration: 0.1, type: "square", gain: 0.16 },
-    { frequency: 208, duration: 0.16, type: "square", gain: 0.16, at: 0.12 },
   ],
   // A short brass-like stab that opens a round.
   sting: [
@@ -265,7 +275,7 @@ export const SOUNDS: Record<Exclude<SoundName, keyof typeof BUZZERS>, Tone[]> = 
 export function play(name: SoundName): void {
   const ctx = getContext();
   if (!ctx || muted || !unlocked) return;
-  if ((name === "strike" || name === "buzz") && playClip(ctx, name)) return;
+  if (name in CLIPS && playClip(ctx, name as ClipName)) return;
   if (name === "strike") scheduleBuzzer(ctx, ctx.currentTime, BUZZERS.strike);
   else scheduleTones(ctx, ctx.currentTime, SOUNDS[name]);
 }

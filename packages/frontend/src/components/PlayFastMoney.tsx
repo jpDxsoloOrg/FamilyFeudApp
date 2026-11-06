@@ -48,7 +48,7 @@ export function PlayFastMoney({ gameId, game, me, clockOffset, lastEvent, lastMe
   useEffect(() => {
     if (lastMessage?.type !== "FAST_MONEY_DUPLICATE") return;
     onToast("Duplicate answer — give a different one!");
-    play("nope");
+    play("duplicate");
     buzzPhone([30, 30, 30]);
     setDuplicate({ questionIndex: Number(lastMessage.detail), tick: lastMessage.serverTime });
     refresh();
