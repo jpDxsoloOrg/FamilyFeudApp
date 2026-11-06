@@ -19,6 +19,7 @@ import { useCountdown } from "../hooks/useCountdown";
 import { useDisplayWindow } from "../hooks/useDisplayWindow";
 import { useHostGame, type UseHostGameResult } from "../hooks/useHostGame";
 import { useHostKeys, type HostUiKeys } from "../hooks/useHostKeys";
+import { play } from "../lib/sounds";
 import { useHostRun } from "../hooks/useHostRun";
 import { useJustRevealed } from "../hooks/useJustRevealed";
 import { useSounds } from "../hooks/useSounds";
@@ -333,6 +334,7 @@ function HostConsole({ gameId: id, token, game, live, muted, toggleMuted, justRe
           onBuzzDuplicate={(questionIndex) =>
             void guarded(async () => {
               await buzzDuplicate(id, token, questionIndex);
+              play("duplicate");
               refreshHost();
             })
           }
