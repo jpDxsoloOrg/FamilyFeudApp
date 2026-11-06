@@ -1,8 +1,7 @@
-// Team chat: a slim bar that opens into a bottom sheet on phones and a panel beside the board on computers. Only ever mounted for a player on a team.
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
+// Team chat: a slim bar that opens into a sheet on phones and a panel in the rail on computers. Only ever mounted for a player on a team.
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { chatMoment, TEAM_MESSAGE_MAX_LENGTH, TEAM_MESSAGE_TTL_MS, unreadCount, unreadLabel } from "@familyfeud/core";
 import { useTeamChat } from "../hooks/useTeamChat";
-import { useVisualViewport } from "../hooks/useVisualViewport";
 import { sendTeamMessage, toApiError } from "../lib/api";
 import type { ApiGame, ApiTeam, ApiTeamMessage } from "../lib/types";
 
@@ -13,12 +12,17 @@ interface Props {
   me: string;
   clockOffset: number;
   open: boolean;
-  /** Play owns this so `main` can make room for the sheet in the same render. */
+  /** From Play, which owns the one visual viewport hook. */
+  keyboardUp: boolean;
+  /** Play owns this so the shell can make room for the sheet in the same render. */
   onOpenTeamChange: (teamId: string | undefined) => void;
 }
 
 const TTL_MINUTES = TEAM_MESSAGE_TTL_MS / 60_000;
 const PINNED_SLACK_PX = 32;
+/** The side panel's breakpoint, as in show.css. */
+const SIDE_PANEL = "(min-width: 940px)";
+const QUICK_REPLIES = ["I know it!", "Not sure", "Go for it", "Good one!"];
 
 /** Without `me` (the host) nothing is styled as your own, so every message shows its sender. */
 export function MessageList({ messages, me, emptyText = "No messages yet. Say hi!" }: { messages: ApiTeamMessage[]; me?: string; emptyText?: string }) {
@@ -88,21 +92,29 @@ function ScoreStrip({ game }: { game: ApiGame }) {
   );
 }
 
-export function TeamChat({ gameId, teamId, game, me, clockOffset, open, onOpenTeamChange }: Props) {
+/** What is already on the board, so a team can confer on a steal with the keyboard up. Revealed slots only. */
+function RevealTicker({ game }: { game: ApiGame }) {
+  const round = game.status === "ROUND_ACTIVE" ? game.currentRound : null;
+  if (!round) return null;
+  const revealed = round.board.filter((slot) => slot.revealed);
+  const parts = revealed.map((slot) => `${slot.text} ${slot.points}`);
+  return <p className="sx-reveal-ticker">{[...parts, `${revealed.length} of ${round.board.length} up`].join(" · ")}</p>;
+}
+
+export function TeamChat({ gameId, teamId, game, me, clockOffset, open, keyboardUp, onOpenTeamChange }: Props) {
   const { messages, addMessage } = useTeamChat(gameId, teamId, clockOffset);
   const [seen, setSeen] = useState<ReadonlySet<string>>(new Set());
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
-  const [problem, setProblem] = useState<string>();
+  const [failed, setFailed] = useState<{ text: string; reason: string }>();
   const [focused, setFocused] = useState(false);
-  const keyboardUp = useVisualViewport(open);
   const input = useRef<HTMLInputElement>(null);
-  const scrollBeforeOpen = useRef<number>();
 
   const moment = chatMoment(game, me);
   const momentKey = moment?.key;
   const typing = open && focused && keyboardUp;
   const unread = useMemo(() => unreadCount(messages, seen, me), [messages, seen, me]);
+  const latestUnseen = useMemo(() => [...messages].reverse().find((message) => message.senderId !== me && !seen.has(message.id)), [messages, seen, me]);
 
   const collapse = useCallback(() => {
     input.current?.blur();
@@ -110,65 +122,88 @@ export function TeamChat({ gameId, teamId, game, me, clockOffset, open, onOpenTe
     onOpenTeamChange(undefined);
   }, [onOpenTeamChange]);
 
-  // Not a lock: this fires as a moment starts, and reopening during it stays open.
   useEffect(() => {
-    if (momentKey) collapse();
+    if (window.matchMedia(SIDE_PANEL).matches) onOpenTeamChange(teamId);
+  }, [onOpenTeamChange, teamId]);
+
+  // Not a lock: this fires as a moment starts, and reopening during it stays open.
+  // Beside the board the panel is in nobody's way, so it only gives up the keyboard.
+  useEffect(() => {
+    if (!momentKey) return;
+    if (window.matchMedia(SIDE_PANEL).matches) input.current?.blur();
+    else collapse();
   }, [momentKey, collapse]);
 
   useEffect(() => {
     if (open) setSeen(new Set(messages.map((message) => message.id)));
   }, [open, messages]);
 
-  // An open sheet pins `main`, which takes the page's scroll position with it.
-  useLayoutEffect(() => {
-    if (open || scrollBeforeOpen.current === undefined) return;
-    window.scrollTo(0, scrollBeforeOpen.current);
-    scrollBeforeOpen.current = undefined;
-  }, [open]);
-
-  function expand(): void {
-    scrollBeforeOpen.current = window.scrollY;
-    onOpenTeamChange(teamId);
-  }
-
-  async function submit(event: FormEvent): Promise<void> {
-    event.preventDefault();
-    const text = draft.trim();
+  async function send(text: string, typed?: string): Promise<void> {
     if (!text || sending) return;
     setSending(true);
-    setProblem(undefined);
+    setFailed(undefined);
     try {
       addMessage(await sendTeamMessage(gameId, me, text));
-      setDraft((current) => (current === draft ? "" : current));
+      if (typed !== undefined) setDraft((current) => (current === typed ? "" : current));
     } catch (cause) {
-      setProblem(toApiError(cause).message);
+      setFailed({ text, reason: toApiError(cause).message });
     } finally {
       setSending(false);
     }
+  }
+
+  function submit(event: FormEvent): void {
+    event.preventDefault();
+    void send(draft.trim(), draft);
   }
 
   if (moment?.overlay) return null;
 
   if (!open) {
     return (
-      <button className="chat-bar" type="button" onClick={expand}>
-        Team chat
+      <button className="chat-bar" type="button" onClick={() => onOpenTeamChange(teamId)}>
+        {latestUnseen ? (
+          <span key={latestUnseen.id} className="chat-bar__preview">
+            <span className="sx-sr">Team chat. </span>
+            {latestUnseen.senderName}: {latestUnseen.text}
+          </span>
+        ) : (
+          "Team chat"
+        )}
         {unread > 0 && <span className="tag tag--gold">{unreadLabel(unread)}</span>}
       </button>
     );
   }
 
+  const note = `Messages disappear after ${TTL_MINUTES} minutes. Only your team and the host can see them.`;
+
   return (
-    <section className={`chat-sheet${typing ? " chat-sheet--typing" : ""}`} aria-label="Team chat">
+    <section className={`chat-sheet${typing ? " chat-sheet--typing" : ""}`} aria-label="Team chat" style={{ "--sx-chat-note": JSON.stringify(note) } as CSSProperties}>
       <div className="chat__head">
         {typing ? <ScoreStrip game={game} /> : <span className="chat__title">Team chat</span>}
         <button className="button button--ghost button--small" type="button" onClick={collapse}>
           Close
         </button>
       </div>
+      {typing && <RevealTicker game={game} />}
       <MessageList messages={messages} me={me} />
-      <p className="chat__note muted">Messages disappear after {TTL_MINUTES} minutes. Only your team and the host can see them.</p>
-      {problem && <p className="field-error">{problem}</p>}
+      {failed && (
+        <p className="sx-strip sx-strip--ember">
+          <span>
+            Didn't send. <span className="small">{failed.reason}</span>
+          </span>
+          <button className="button button--small button--ghost" type="button" disabled={sending} onMouseDown={(event) => event.preventDefault()} onClick={() => void send(failed.text, failed.text === draft.trim() ? draft : undefined)}>
+            Retry
+          </button>
+        </p>
+      )}
+      <div className="sx-quick">
+        {QUICK_REPLIES.map((reply) => (
+          <button key={reply} className="sx-quick__reply" type="button" disabled={sending} onMouseDown={(event) => event.preventDefault()} onClick={() => void send(reply)}>
+            {reply}
+          </button>
+        ))}
+      </div>
       <form className="chat__form" onSubmit={submit}>
         <input
           ref={input}
@@ -179,7 +214,10 @@ export function TeamChat({ gameId, teamId, game, me, clockOffset, open, onOpenTe
           enterKeyHint="send"
           placeholder="Message your team"
           aria-label="Message your team"
-          onChange={(event) => setDraft(event.target.value)}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            setFailed(undefined);
+          }}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
         />
