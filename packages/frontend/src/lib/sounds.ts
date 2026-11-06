@@ -1,9 +1,10 @@
 /**
- * Task 3.9 — sound effects synthesised with WebAudio, plus the buzz-in clip.
+ * Task 3.9 — sound effects synthesised with WebAudio, plus the buzz-in and strike clips.
  * Browsers block audio until a user gesture, so `unlock()` is called on the
  * first tap/keypress and everything before that is silently dropped.
  */
 import buzzClipUrl from "../assets/buzzer.mp3";
+import strikeClipUrl from "../assets/wrong.mp3";
 
 const MUTE_KEY = "familyfeud.muted";
 
@@ -46,7 +47,7 @@ export function unlock(): void {
   if (!ctx) return;
   if (ctx.state === "suspended") void ctx.resume();
   unlocked = true;
-  loadBuzzClip(ctx);
+  loadClips(ctx);
 }
 
 export function isUnlocked(): boolean {
@@ -116,7 +117,7 @@ export function scheduleBuzzer(ctx: BaseAudioContext, start: number, { frequency
 }
 
 export const BUZZERS = {
-  // The wrong-answer buzzer: long, low and flat.
+  // The wrong-answer buzzer, for the moment before the clip has loaded: long, low and flat.
   strike: { frequency: 130, duration: 0.85, gain: 0.2 },
 } as const satisfies Partial<Record<SoundName, Buzzer>>;
 
@@ -138,32 +139,54 @@ export function scheduleTones(ctx: BaseAudioContext, now: number, tones: Tone[])
   }
 }
 
-/** The clip is quiet as recorded. */
-const BUZZ_CLIP_GAIN = 2.5;
-let buzzClip: AudioBuffer | undefined;
-let buzzClipRequested = false;
+/** Both clips are quiet as recorded, so each gets its own boost. */
+const CLIPS = {
+  buzz: { url: buzzClipUrl, gain: 2.5 },
+  strike: { url: strikeClipUrl, gain: 2.8 },
+} as const;
+type ClipName = keyof typeof CLIPS;
 
-function loadBuzzClip(ctx: BaseAudioContext): void {
-  if (buzzClipRequested) return;
-  buzzClipRequested = true;
-  fetch(buzzClipUrl)
-    .then((response) => response.arrayBuffer())
-    .then((data) => ctx.decodeAudioData(data))
-    .then((clip) => {
-      buzzClip = clip;
-    })
-    .catch(() => {
-      // The synthesised ring covers it, and the next page load tries again.
-    });
+interface LoadedClip {
+  buffer: AudioBuffer;
+  /** Where the sound starts: it has to land with the moment on screen, not after a clip's silent lead-in. */
+  offset: number;
 }
 
-function playClip(ctx: BaseAudioContext, clip: AudioBuffer, gain: number): void {
+const SILENCE = 0.01;
+const clips: Partial<Record<ClipName, LoadedClip>> = {};
+let clipsRequested = false;
+
+function soundStart(buffer: AudioBuffer): number {
+  const first = buffer.getChannelData(0).findIndex((sample) => Math.abs(sample) > SILENCE);
+  return first > 0 ? first / buffer.sampleRate : 0;
+}
+
+function loadClips(ctx: BaseAudioContext): void {
+  if (clipsRequested) return;
+  clipsRequested = true;
+  for (const name of Object.keys(CLIPS) as ClipName[]) {
+    fetch(CLIPS[name].url)
+      .then((response) => response.arrayBuffer())
+      .then((data) => ctx.decodeAudioData(data))
+      .then((buffer) => {
+        clips[name] = { buffer, offset: soundStart(buffer) };
+      })
+      .catch(() => {
+        // The synthesised version covers it, and the next page load tries again.
+      });
+  }
+}
+
+function playClip(ctx: BaseAudioContext, name: ClipName): boolean {
+  const clip = clips[name];
+  if (!clip) return false;
   const source = ctx.createBufferSource();
   const level = ctx.createGain();
-  source.buffer = clip;
-  level.gain.value = gain;
+  source.buffer = clip.buffer;
+  level.gain.value = CLIPS[name].gain;
   source.connect(level).connect(ctx.destination);
-  source.start();
+  source.start(0, clip.offset);
+  return true;
 }
 
 /** A quick electronic ring, for the moment before the clip has loaded. */
@@ -242,7 +265,7 @@ export const SOUNDS: Record<Exclude<SoundName, keyof typeof BUZZERS>, Tone[]> = 
 export function play(name: SoundName): void {
   const ctx = getContext();
   if (!ctx || muted || !unlocked) return;
+  if ((name === "strike" || name === "buzz") && playClip(ctx, name)) return;
   if (name === "strike") scheduleBuzzer(ctx, ctx.currentTime, BUZZERS.strike);
-  else if (name === "buzz" && buzzClip) playClip(ctx, buzzClip, BUZZ_CLIP_GAIN);
   else scheduleTones(ctx, ctx.currentTime, SOUNDS[name]);
 }
