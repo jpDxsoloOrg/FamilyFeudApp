@@ -1,5 +1,5 @@
 /** Out of the picture until someone reaches for it. On a touch screen there is no hover, so it stays put as a slim bar. */
-import { Maximize, Minimize } from "lucide-react";
+import { Maximize, Minimize, Volume2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAudioReady } from "../../hooks/useAudioReady";
 import { isMuted } from "../../lib/sounds";
@@ -10,11 +10,23 @@ import { Wordmark } from "../show/Wordmark";
 
 const IDLE_MS = 4000;
 
-/** A browser plays nothing until someone in the room touches something. */
-export function SoundPrompt() {
+/**
+ * A browser plays nothing in this window until someone clicks in it, and the
+ * host usually shares this window on a call without ever touching it. So the
+ * ask is big and in the middle until it is answered.
+ */
+export function SoundGate() {
   const ready = useAudioReady();
   if (ready || isMuted()) return null;
-  return <p className="sx-pill sx-pill--prompt">Tap or press any key for sound</p>;
+  return (
+    <div className="sx-soundgate" role="button" tabIndex={0} aria-label="Turn on sound">
+      <div className="sx-soundgate__card">
+        <Volume2 className="sx-soundgate__icon" aria-hidden="true" />
+        <p className="sx-soundgate__title">Click anywhere to turn on sound</p>
+        <p className="sx-soundgate__text">The game's buzzers and bells play from this screen.</p>
+      </div>
+    </div>
+  );
 }
 
 interface Props {
@@ -22,11 +34,9 @@ interface Props {
   muted: boolean;
   onToggleMuted?: () => void;
   realtime: RealtimeStatus;
-  /** The lobby shows the sound prompt under the join code instead. */
-  inLobby: boolean;
 }
 
-export function TvControls({ framed, muted, onToggleMuted, realtime, inLobby }: Props) {
+export function TvControls({ framed, muted, onToggleMuted, realtime }: Props) {
   const root = useRef<HTMLDivElement>(null);
   const [awake, setAwake] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
@@ -93,11 +103,7 @@ export function TvControls({ framed, muted, onToggleMuted, realtime, inLobby }: 
               </button>
             )}
           </div>
-          {!inLobby && (
-            <div className="sx-tvsound">
-              <SoundPrompt />
-            </div>
-          )}
+          <SoundGate />
         </>
       )}
     </div>

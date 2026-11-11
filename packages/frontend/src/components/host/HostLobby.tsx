@@ -2,6 +2,7 @@
 import { Check, Circle, ExternalLink, Shuffle } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { displaySoundNote, type DisplaySound } from "../../hooks/useDisplaySound";
 import type { DisplayWindow } from "../../hooks/useDisplayWindow";
 import type { ApiGame } from "../../lib/types";
 import { JoinQr } from "../JoinQr";
@@ -16,6 +17,7 @@ interface Props extends PlayerActions {
   surveysReady: number | undefined;
   surveys: SurveyChoice;
   display: DisplayWindow;
+  displaySound: DisplaySound;
   onRandomize: () => void;
   onAddTestPlayers: (count: number) => void;
 }
@@ -29,7 +31,7 @@ function Flight({ done, children }: { done: boolean; children: ReactNode }) {
   );
 }
 
-export function HostLobby({ gameId, game, busy, surveysReady, surveys, display, onRandomize, onAddTestPlayers, ...playerActions }: Props) {
+export function HostLobby({ gameId, game, busy, surveysReady, surveys, display, displaySound, onRandomize, onAddTestPlayers, ...playerActions }: Props) {
   const teamsSet = game.teams.length > 0;
   const active = game.players.filter((player) => player.active);
   const [testCount, setTestCount] = useState("4");
@@ -51,8 +53,8 @@ export function HostLobby({ gameId, game, busy, surveysReady, surveys, display, 
       </section>
 
       <ul className="hx-flights" aria-label="Before you start">
-        <Flight done={display.opened}>
-          Display opened
+        <Flight done={displaySound === "on"}>
+          <span title={displaySoundNote(displaySound)}>{displaySound === "on" ? "Display sound on" : displaySound === "off" ? "Click the display for sound" : "Display opened"}</span>
           <button className="hx-mini" type="button" onClick={display.open}>
             <ExternalLink size={14} aria-hidden="true" /> Open
           </button>

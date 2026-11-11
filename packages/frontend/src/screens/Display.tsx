@@ -1,5 +1,5 @@
 // The TV. /display and /watch share this, and so does the spectator on a phone.
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { useMatch, useParams } from "react-router-dom";
 import { DisplayFastMoney } from "../components/DisplayFastMoney";
 import { DisplayRound } from "../components/DisplayRound";
@@ -7,12 +7,12 @@ import { JoinQr } from "../components/JoinQr";
 import { Scoreboard } from "../components/Scoreboard";
 import { Finale } from "../components/show/Finale";
 import { Wordmark } from "../components/show/Wordmark";
-import { SoundPrompt } from "../components/tv/TvControls";
 import { TvStage } from "../components/tv/TvStage";
 import { useFreshReveals } from "../hooks/useFreshReveals";
 import { useGame } from "../hooks/useGame";
 import { useJustRevealedFastMoney } from "../hooks/useJustRevealedFastMoney";
 import { useNewcomers } from "../hooks/useNewcomers";
+import { useReportDisplaySound } from "../hooks/useDisplaySound";
 import { useSounds, withoutRoomSounds } from "../hooks/useSounds";
 import { otherTeam } from "../lib/gameHelpers";
 import type { ApiGame, ApiGameUpdate } from "../lib/types";
@@ -32,7 +32,7 @@ function TvCodeTiles({ code }: { code: string }) {
   );
 }
 
-export function LobbyDisplay({ game, soundPrompt, openQr }: { game: ApiGame; soundPrompt?: ReactNode; openQr?: boolean }) {
+export function LobbyDisplay({ game, openQr }: { game: ApiGame; openQr?: boolean }) {
   const [showQr, setShowQr] = useState(Boolean(openQr));
   const isNew = useNewcomers(game.players);
   return (
@@ -42,7 +42,6 @@ export function LobbyDisplay({ game, soundPrompt, openQr }: { game: ApiGame; sou
         <p className="sx-tvlobby__where">Join at {window.location.host} with code</p>
         <TvCodeTiles code={game.joinCode} />
         <p className="sx-tvlobby__count">{game.players.length === 0 ? "Waiting for players…" : `${game.players.length} in the lobby`}</p>
-        {soundPrompt}
       </div>
       <div className="sx-tvlobby__scan" data-open={showQr ? "" : undefined}>
         <div className="sx-qrbox">
@@ -122,13 +121,12 @@ export function TvShow({ game, lastEvent, clockOffset, embedded }: ShowProps) {
   const fastMoney = game.status === "FAST_MONEY";
   const fmSetup = fastMoney && (game.fastMoney === null || game.fastMoney.stage === "SETUP");
   const control = round?.state === "STEAL" ? otherTeam(game, round.playingTeamId)?.id : round?.playingTeamId;
-  const framed = window.self !== window.top;
   const view = round ? "round" : fastMoney ? "fm" : game.status === "FINISHED" ? "finale" : game.status === "LOBBY" ? "lobby" : "teams";
 
   return (
     <div className="sx-tv__show" data-view={view} data-setup={fmSetup ? "" : undefined} data-state={round?.state}>
       {(round || fmSetup) && <Scoreboard teams={game.teams} pot={round?.pot ?? 0} multiplier={round?.multiplier ?? 1} activeTeamId={control} />}
-      {view === "lobby" && <LobbyDisplay game={game} openQr={!embedded} soundPrompt={!embedded && !framed ? <SoundPrompt /> : undefined} />}
+      {view === "lobby" && <LobbyDisplay game={game} openQr={!embedded} />}
       {view === "teams" && <TeamsDisplay game={game} />}
       {round && <DisplayRound game={game} round={round} fresh={fresh} />}
       {fastMoney && <DisplayFastMoney game={game} clockOffset={clockOffset} justRevealed={justRevealedFm} />}
@@ -143,6 +141,8 @@ export function Display() {
   // /watch is a follower's phone in the room, so it leaves these to the TV.
   const watching = useMatch("/watch/:gameId") !== null;
   const { muted, toggleMuted } = useSounds(watching ? withoutRoomSounds(lastEvent) : lastEvent);
+  // The host's own live preview is an iframe of this page; only the real TV window reports.
+  useReportDisplaySound(gameId, !watching && window.self === window.top);
 
   return (
     <TvStage game={game} lastEvent={lastEvent} realtime={realtime} muted={muted} onToggleMuted={toggleMuted}>
