@@ -1,6 +1,7 @@
 /** The TV screen is its own window. This opens it, shares it and shows what it is showing. */
 import { ExternalLink, Share2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { displaySoundNote, type DisplaySound } from "../../hooks/useDisplaySound";
 import type { DisplayWindow } from "../../hooks/useDisplayWindow";
 import { CopyButton } from "../CopyButton";
 import { HostSheet } from "./HostSheet";
@@ -39,11 +40,12 @@ function LiveMonitor({ url }: { url: string }) {
 
 interface Props {
   display: DisplayWindow;
+  displaySound: DisplaySound;
   strip: ReactNode;
   onClose: () => void;
 }
 
-export function DisplaySheet({ display, strip, onClose }: Props) {
+export function DisplaySheet({ display, displaySound, strip, onClose }: Props) {
   const { url, opened, blocked, open } = display;
   const canShare = typeof navigator.share === "function";
 
@@ -52,6 +54,9 @@ export function DisplaySheet({ display, strip, onClose }: Props) {
       <div className="hx-display">
         <div className="hx-display__actions">
           <p className="hx-eyebrow">{opened ? "Open in this browser" : "Not opened here, it may be on the TV"}</p>
+          <p className="hx-note" data-sound={displaySound}>
+            {displaySoundNote(displaySound)}
+          </p>
           <button className="button button--primary" type="button" onClick={open}>
             <ExternalLink size={18} aria-hidden="true" /> Open display
           </button>

@@ -89,7 +89,7 @@ export function TvStage({ game, lastEvent, embedded, realtime, muted = false, on
       {!embedded && <h1 className="sx-sr">{PRODUCT_NAME}</h1>}
       <Frame className="sx-tv__frame">{children}</Frame>
       <MomentLayer current={moment} />
-      {!embedded && <TvControls framed={framed} muted={muted} onToggleMuted={onToggleMuted} realtime={realtime} inLobby={game?.status === "LOBBY"} />}
+      {!embedded && <TvControls framed={framed} muted={muted} onToggleMuted={onToggleMuted} realtime={realtime} />}
     </div>
   );
 }

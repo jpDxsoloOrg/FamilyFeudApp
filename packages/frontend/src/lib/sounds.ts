@@ -49,11 +49,16 @@ export function unlock(): void {
   if (!ctx) return;
   if (ctx.state === "suspended") void ctx.resume();
   unlocked = true;
-  loadClips(ctx);
+  decodeClips(ctx);
 }
 
 export function isUnlocked(): boolean {
   return unlocked;
+}
+
+/** Sound will actually come out of this window: unlocked, running and not muted. */
+export function isSounding(): boolean {
+  return unlocked && !muted && context?.state === "running";
 }
 
 interface Tone {
@@ -157,40 +162,63 @@ interface LoadedClip {
 }
 
 const SILENCE = 0.01;
+/** How long a sound may wait for its clip to finish decoding before the synthesised stand-in plays. */
+const CLIP_WAIT_MS = 700;
 const clips: Partial<Record<ClipName, LoadedClip>> = {};
-let clipsRequested = false;
+/** Pending decodes, so a sound asked for mid-decode waits for the real clip. */
+const decoding: Partial<Record<ClipName, Promise<LoadedClip | undefined>>> = {};
 
 function soundStart(buffer: AudioBuffer): number {
   const first = buffer.getChannelData(0).findIndex((sample) => Math.abs(sample) > SILENCE);
   return first > 0 ? first / buffer.sampleRate : 0;
 }
 
-function loadClips(ctx: BaseAudioContext): void {
-  if (clipsRequested) return;
-  clipsRequested = true;
+/**
+ * The clip bytes download as soon as the app loads; that needs no gesture.
+ * Waiting for the first tap made the first buzz play the synthesised stand-in.
+ */
+const clipBytes: Partial<Record<ClipName, Promise<ArrayBuffer | undefined>>> = {};
+
+function prefetchClips(): void {
+  if (typeof fetch === "undefined") return;
   for (const name of Object.keys(CLIPS) as ClipName[]) {
-    fetch(CLIPS[name].url)
-      .then((response) => response.arrayBuffer())
-      .then((data) => ctx.decodeAudioData(data))
+    clipBytes[name] ??= fetch(CLIPS[name].url)
+      .then((response) => (response.ok ? response.arrayBuffer() : undefined))
+      .catch(() => undefined);
+  }
+}
+
+prefetchClips();
+
+/** Decoding needs the context, so it starts at unlock; the bytes are usually already here. */
+function decodeClips(ctx: BaseAudioContext): void {
+  prefetchClips();
+  for (const name of Object.keys(CLIPS) as ClipName[]) {
+    if (clips[name] || decoding[name]) continue;
+    decoding[name] = (clipBytes[name] ?? Promise.resolve(undefined))
+      // decodeAudioData detaches its buffer, so hand it a copy and keep the bytes for a retry.
+      .then((data) => (data ? ctx.decodeAudioData(data.slice(0)) : undefined))
       .then((buffer) => {
-        clips[name] = { buffer, offset: soundStart(buffer) };
+        if (!buffer) return undefined;
+        const clip = { buffer, offset: soundStart(buffer) };
+        clips[name] = clip;
+        return clip;
       })
-      .catch(() => {
-        // The synthesised version covers it, and the next page load tries again.
+      .catch(() => undefined)
+      .finally(() => {
+        // A failed decode may try again on the next unlock.
+        if (!clips[name]) delete decoding[name];
       });
   }
 }
 
-function playClip(ctx: BaseAudioContext, name: ClipName): boolean {
-  const clip = clips[name];
-  if (!clip) return false;
+function startClip(ctx: BaseAudioContext, name: ClipName, clip: LoadedClip): void {
   const source = ctx.createBufferSource();
   const level = ctx.createGain();
   source.buffer = clip.buffer;
   level.gain.value = CLIPS[name].gain;
   source.connect(level).connect(ctx.destination);
   source.start(0, clip.offset);
-  return true;
 }
 
 /** A quick electronic ring, for the moment before the clip has loaded. */
@@ -272,10 +300,43 @@ export const SOUNDS: Record<Exclude<SoundName, keyof typeof BUZZERS>, Tone[]> = 
   ],
 };
 
+function playSynth(ctx: BaseAudioContext, name: SoundName): void {
+  if (name === "strike") scheduleBuzzer(ctx, ctx.currentTime, BUZZERS.strike);
+  else scheduleTones(ctx, ctx.currentTime, SOUNDS[name]);
+}
+
+function isClip(name: SoundName): name is ClipName {
+  return name in CLIPS;
+}
+
 export function play(name: SoundName): void {
   const ctx = getContext();
   if (!ctx || muted || !unlocked) return;
-  if (name in CLIPS && playClip(ctx, name as ClipName)) return;
-  if (name === "strike") scheduleBuzzer(ctx, ctx.currentTime, BUZZERS.strike);
-  else scheduleTones(ctx, ctx.currentTime, SOUNDS[name]);
+  if (!isClip(name)) {
+    playSynth(ctx, name);
+    return;
+  }
+  const ready = clips[name];
+  if (ready) {
+    startClip(ctx, name, ready);
+    return;
+  }
+  const pending = decoding[name];
+  if (!pending) {
+    playSynth(ctx, name);
+    return;
+  }
+  // Still decoding (the first tap after unlock): wait briefly for the real clip.
+  let settled = false;
+  const fallback = window.setTimeout(() => {
+    settled = true;
+    playSynth(ctx, name);
+  }, CLIP_WAIT_MS);
+  void pending.then((clip) => {
+    if (settled) return;
+    settled = true;
+    window.clearTimeout(fallback);
+    if (clip) startClip(ctx, name, clip);
+    else playSynth(ctx, name);
+  });
 }

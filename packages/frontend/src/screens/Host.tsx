@@ -22,6 +22,7 @@ import { useHostKeys, type HostUiKeys } from "../hooks/useHostKeys";
 import { play } from "../lib/sounds";
 import { useHostRun } from "../hooks/useHostRun";
 import { useJustRevealed } from "../hooks/useJustRevealed";
+import { useDisplaySound, type DisplaySound } from "../hooks/useDisplaySound";
 import { useSounds } from "../hooks/useSounds";
 import {
   armBuzzers,
@@ -81,7 +82,9 @@ export function Host() {
   const { gameId } = useParams<{ gameId: string }>();
   const live = useHostGame(gameId);
   const { game, hostToken, isHost, loading, error, lastEvent } = live;
-  const { muted, toggleMuted } = useSounds(lastEvent);
+  // When the display window has sound, it carries the room sounds (it is what gets shared on a call).
+  const displaySound = useDisplaySound(gameId);
+  const { muted, toggleMuted } = useSounds(displaySound === "on" ? undefined : lastEvent);
   const justRevealed = useJustRevealed(game?.currentRound);
 
   if (!gameId) {
@@ -109,7 +112,7 @@ export function Host() {
     );
   }
 
-  return <HostConsole gameId={gameId} token={hostToken} game={game} live={live} muted={muted} toggleMuted={toggleMuted} justRevealed={justRevealed} />;
+  return <HostConsole gameId={gameId} token={hostToken} game={game} live={live} muted={muted} toggleMuted={toggleMuted} justRevealed={justRevealed} displaySound={displaySound} />;
 }
 
 interface ConsoleProps {
@@ -120,11 +123,12 @@ interface ConsoleProps {
   muted: boolean;
   toggleMuted: () => void;
   justRevealed: number | null;
+  displaySound: DisplaySound;
 }
 
 type Sheet = "display" | "menu" | "players" | "keys";
 
-function HostConsole({ gameId: id, token, game, live, muted, toggleMuted, justRevealed }: ConsoleProps) {
+function HostConsole({ gameId: id, token, game, live, muted, toggleMuted, justRevealed, displaySound }: ConsoleProps) {
   const { host, realtime, lastEvent, clockOffset, applyUpdate, refreshHost } = live;
 
   const runner = useHostRun({
@@ -257,6 +261,7 @@ function HostConsole({ gameId: id, token, game, live, muted, toggleMuted, justRe
           unassigned={hasTeams ? unassigned : 0}
           onToggleMuted={toggleMuted}
           onDisplay={ui.display}
+          displaySound={displaySound}
           onChats={toggleChats}
           onPlayers={ui.players}
           onMenu={() => setSheet("menu")}
@@ -275,7 +280,7 @@ function HostConsole({ gameId: id, token, game, live, muted, toggleMuted, justRe
       }
       sheets={
         <>
-          {sheet === "display" && <DisplaySheet display={display} strip={strip} onClose={closeSheet} />}
+          {sheet === "display" && <DisplaySheet display={display} displaySound={displaySound} strip={strip} onClose={closeSheet} />}
           {sheet === "menu" && (
             <MenuSheet
               gameId={id}
@@ -306,6 +311,7 @@ function HostConsole({ gameId: id, token, game, live, muted, toggleMuted, justRe
           surveysReady={host ? host.surveys.length : undefined}
           surveys={surveys}
           display={display}
+          displaySound={displaySound}
           onRandomize={actions.randomize}
           onAddTestPlayers={addTestPlayers}
           {...playerActions}
