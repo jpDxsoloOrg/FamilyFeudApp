@@ -11,6 +11,8 @@ import type {
   FastMoneyState,
   GameConfig,
   GameStatus,
+  Lineup,
+  LineupPins,
   Player,
   RoundData,
   Survey,
@@ -43,6 +45,9 @@ export interface FullGame {
   rounds: RoundData[];
   fastMoneyQuestions: FastMoneyQuestion[];
   fastMoney: FastMoneyState;
+  lineupPins: LineupPins;
+  /** Question numbers in play order; null until round 1 starts. */
+  lineup: Lineup | null;
 }
 
 function byNumber<T extends { number: number }>(items: T[]): T[] {
@@ -97,6 +102,8 @@ export function assembleGame(metaItem: Item, items: Item[]): FullGame {
       timerEndsAt: meta.timerEndsAt,
       responses: responses.sort((a, b) => a.slot - b.slot || a.questionIndex - b.questionIndex),
     },
+    lineupPins: meta.lineupPins,
+    lineup: meta.lineup,
   };
 }
 
@@ -104,4 +111,16 @@ export function assembleGame(metaItem: Item, items: Item[]): FullGame {
 export function currentRoundOf(game: FullGame): RoundData | undefined {
   if (game.currentRound === null) return undefined;
   return game.rounds.find((round) => round.number === game.currentRound);
+}
+
+/**
+ * The Fast Money questions in play order: the drawn lineup, or (for games
+ * that predate lineups) the first N questions in the bank. `questionIndex` on
+ * a Fast Money response indexes into this list.
+ */
+export function fastMoneySet(game: FullGame): FastMoneyQuestion[] {
+  if (game.lineup && game.lineup.fastMoney.length > 0) {
+    return game.lineup.fastMoney.flatMap((number) => game.fastMoneyQuestions.filter((q) => q.number === number));
+  }
+  return game.fastMoneyQuestions.slice(0, game.config.fastMoneyQuestionCount);
 }

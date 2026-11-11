@@ -1,23 +1,30 @@
-/** Choosing the next survey. The press lives in the dock, so the choice is lifted to the console. */
-import { useEffect, useMemo, useState } from "react";
+/**
+ * The next round's survey. The whole lineup is drawn from the question bank
+ * when round 1 starts (random, no repeats, plus any pins from Setup), so the
+ * host no longer picks; the press lives in the dock.
+ */
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import type { ApiGame, Survey } from "../../lib/types";
+import type { ApiGame, ApiLineup, Survey } from "../../lib/types";
 
 export interface SurveyChoice {
   unused: Survey[];
+  /** The next lineup survey; undefined before round 1 draws the lineup. */
   selected: Survey | undefined;
-  choose: (surveyNumber: number) => void;
+  /** Surveys still missing from the bank before round 1 can start (0 once drawn). */
+  short: number;
 }
 
-export function useSurveyChoice(surveys: Survey[]): SurveyChoice {
-  const unused = useMemo(() => surveys.filter((survey) => !survey.used), [surveys]);
-  const [choice, setChoice] = useState<number | undefined>(unused[0]?.number);
-
-  useEffect(() => {
-    if (!unused.some((survey) => survey.number === choice)) setChoice(unused[0]?.number);
-  }, [unused, choice]);
-
-  return { unused, selected: unused.find((survey) => survey.number === choice) ?? unused[0], choose: setChoice };
+export function useSurveyChoice(surveys: Survey[], lineup: ApiLineup | undefined, game: ApiGame): SurveyChoice {
+  const nextNumber = (game.currentRound?.number ?? 0) + 1;
+  const drawn = lineup?.surveys ?? null;
+  const roundCount = game.config.roundCount;
+  return useMemo(() => {
+    const unused = surveys.filter((survey) => !survey.used);
+    const selected = drawn ? surveys.find((survey) => survey.number === drawn[nextNumber - 1]) : undefined;
+    const short = drawn ? 0 : Math.max(0, roundCount - unused.length);
+    return { unused, selected, short };
+  }, [surveys, drawn, nextNumber, roundCount]);
 }
 
 interface Props {
@@ -28,7 +35,7 @@ interface Props {
 }
 
 export function NextRoundPanel({ gameId, game, surveys, loaded }: Props) {
-  const { unused, selected, choose } = surveys;
+  const { selected, short } = surveys;
   const nextNumber = (game.currentRound?.number ?? 0) + 1;
   if (nextNumber > game.config.roundCount) return null;
   const multiplier = game.config.roundMultipliers[nextNumber - 1] ?? 1;
@@ -39,24 +46,22 @@ export function NextRoundPanel({ gameId, game, surveys, loaded }: Props) {
         Start round {nextNumber} of {game.config.roundCount}
         {multiplier > 1 && <span className="hx-tag">×{multiplier}</span>}
       </h2>
-      {loaded && unused.length === 0 ? (
+      {loaded && short > 0 ? (
         <p className="hx-note">
-          No unused surveys left. <Link to={`/host/${gameId}/setup`}>Write one in Setup</Link>.
+          The survey bank needs {short} more question{short === 1 ? "" : "s"} for {game.config.roundCount} rounds.{" "}
+          <Link to={`/host/${gameId}/setup`}>Add them in Setup</Link>.
         </p>
-      ) : (
+      ) : selected ? (
         <div className="form">
-          <label className="field">
-            <span className="hx-eyebrow">Survey</span>
-            <select className="input input--small" value={selected?.number} onChange={(event) => choose(Number(event.target.value))}>
-              {unused.map((survey) => (
-                <option key={survey.number} value={survey.number}>
-                  #{survey.number} — {survey.text}
-                </option>
-              ))}
-            </select>
-          </label>
-          {selected && <p className="hx-note">{selected.answers.map((answer) => `${answer.text} (${answer.points})`).join(" · ")}</p>}
+          <span className="hx-eyebrow">Next survey</span>
+          <p>{selected.text}</p>
+          <p className="hx-note">{selected.answers.map((answer) => `${answer.text} (${answer.points})`).join(" · ")}</p>
         </div>
+      ) : (
+        <p className="hx-note">
+          Starting round 1 draws the whole lineup from the question bank: random questions with no repeats, plus any you
+          pinned in <Link to={`/host/${gameId}/setup`}>Setup</Link>.
+        </p>
       )}
     </section>
   );

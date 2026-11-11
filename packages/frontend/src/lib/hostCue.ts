@@ -47,7 +47,8 @@ export interface Cue {
 }
 
 export interface CueActions {
-  start: (surveyNumber: number) => void;
+  /** The server takes the next survey from the lineup. */
+  start: () => void;
   arm: () => void;
   reset: () => void;
   faceOff: (teamId: string) => void;
@@ -76,6 +77,8 @@ export interface CueContext {
   gameId: string;
   unused: Survey[];
   survey: Survey | undefined;
+  /** Surveys missing from the bank before round 1 can start. */
+  short: number;
   picks: { teamId: string; picked: string[] };
   reveal: FmRevealView | undefined;
   seconds: number | null;
@@ -198,15 +201,15 @@ export function phaseChip(game: ApiGame): { short: string; label: string; full: 
 }
 
 function startLead(ctx: CueContext, number: number): CueAction {
-  const { survey, actions, host, gameId, unused } = ctx;
-  if (host && unused.length === 0) {
-    return act("write-survey", "Write one in Setup", "advance", () => undefined, { to: `/host/${gameId}/setup`, size: "xl", icon: PenLine });
+  const { actions, host, gameId, short } = ctx;
+  if (host && short > 0) {
+    return act("write-survey", "Add surveys in Setup", "advance", () => undefined, { to: `/host/${gameId}/setup`, size: "xl", icon: PenLine });
   }
-  return act("start-round", `Start round ${number}`, "advance", () => survey && actions.start(survey.number), {
+  return act("start-round", `Start round ${number}`, "advance", () => actions.start(), {
     size: "xl",
     icon: Play,
-    enabled: survey !== undefined,
-    reason: host ? "Pick a survey" : "Loading surveys…",
+    enabled: host !== undefined,
+    reason: "Loading surveys…",
   });
 }
 
@@ -223,7 +226,7 @@ function betweenRoundsCue(ctx: CueContext): Cue {
     return { ...base, id: "rounds-done", headline: "All rounds played. Fast Money comes next.", hint: "Waiting for Fast Money", lead: [] };
   }
   const lead = startLead(ctx, number);
-  if (ctx.host && unused.length === 0) return { ...base, id: `round-${number}-nosurvey`, headline: "No unused surveys left", lead: [lead] };
+  if (ctx.host && ctx.short > 0) return { ...base, id: `round-${number}-nosurvey`, headline: "Not enough surveys in the bank", lead: [lead] };
   const mult = game.config.roundMultipliers[number - 1] ?? 1;
   const start = { ...lead, key: "Space" };
   return {
@@ -365,7 +368,7 @@ function lobbyCue(ctx: CueContext): Cue {
     return {
       ...base,
       id: "lobby-teams",
-      headline: ctx.host && ctx.unused.length === 0 ? "No unused surveys left" : "Start round 1 when everyone's ready",
+      headline: ctx.host && ctx.short > 0 ? "Not enough surveys in the bank" : "Start round 1 when everyone's ready",
       detail: lead.enabled ? undefined : lead.reason,
       lead: [lead],
     };

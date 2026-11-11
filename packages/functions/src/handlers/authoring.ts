@@ -1,11 +1,12 @@
-// Task 2.6 — upsertSurvey, deleteSurvey, upsertFastMoneyQuestion, deleteFastMoneyQuestion.
-import type { FastMoneyQuestion, Survey, SurveyAnswer } from "@familyfeud/core";
+// Task 2.6 — upsertSurvey, deleteSurvey, upsertFastMoneyQuestion, deleteFastMoneyQuestion, setLineupPins.
+import type { FastMoneyQuestion, LineupPins, Survey, SurveyAnswer } from "@familyfeud/core";
 import { requiredArray, requiredInt, requiredString, type Args } from "../lib/args.js";
 import { requireHost } from "../lib/auth.js";
-import { deleteItem, putItem } from "../lib/db.js";
+import { deleteItem, putItem, updateItem } from "../lib/db.js";
 import { ConflictError, NotFoundError, ValidationError } from "../lib/errors.js";
 import { keys } from "../lib/keys.js";
 import type { FastMoneyQuestionItem, SurveyItem } from "../lib/mappers.js";
+import { toHostGame, type LineupView } from "../lib/views.js";
 
 export const MAX_BOARD_ANSWERS = 8;
 export const MAX_QUESTION_LENGTH = 200;
@@ -72,6 +73,9 @@ export async function deleteSurvey(args: Args): Promise<boolean> {
   const existing = game.surveys.find((survey) => survey.number === number);
   if (!existing) throw new NotFoundError(`No survey ${number} in this game`);
   if (existing.used) throw new ConflictError(`Survey ${number} has already been played and cannot be deleted`);
+  if (game.lineup?.surveys.includes(number)) {
+    throw new ConflictError(`Survey ${number} is in this game's lineup and cannot be deleted`);
+  }
 
   await deleteItem(keys.survey(gameId, number));
   return true;
@@ -105,7 +109,62 @@ export async function deleteFastMoneyQuestion(args: Args): Promise<boolean> {
   }
   const existing = game.fastMoneyQuestions.find((question) => question.number === number);
   if (!existing) throw new NotFoundError(`No Fast Money question ${number} in this game`);
+  if (game.lineup?.fastMoney.includes(number)) {
+    throw new ConflictError(`Fast Money question ${number} is in this game's lineup and cannot be deleted`);
+  }
 
   await deleteItem(keys.fastMoneyQuestion(gameId, number));
   return true;
+}
+
+/** Slots kept per bank: the largest round / Fast Money count the config allows. */
+const MAX_LINEUP_SLOTS = 10;
+
+/** `[Int]!` of question numbers, null = random; every pin must exist and be unique. */
+function parsePins(args: Args, name: string, existing: readonly number[]): (number | null)[] {
+  const raw = requiredArray(args, name);
+  if (raw.length > MAX_LINEUP_SLOTS) throw new ValidationError(`"${name}" has more than ${MAX_LINEUP_SLOTS} slots`);
+  const seen = new Set<number>();
+  return raw.map((entry, slot) => {
+    if (entry === null || entry === undefined) return null;
+    if (typeof entry !== "number" || !Number.isInteger(entry)) {
+      throw new ValidationError(`Slot ${slot + 1} must be a question number or null`);
+    }
+    if (!existing.includes(entry)) throw new NotFoundError(`Question ${entry} is not in the bank`);
+    if (seen.has(entry)) throw new ValidationError(`Question ${entry} is picked for more than one slot`);
+    seen.add(entry);
+    return entry;
+  });
+}
+
+/**
+ * Pin specific questions to round / Fast Money slots before the game starts.
+ * Unpinned slots are drawn at random when round 1 starts.
+ */
+export async function setLineupPins(args: Args): Promise<LineupView> {
+  const gameId = requiredString(args, "gameId");
+  const hostToken = requiredString(args, "hostToken");
+
+  const game = await requireHost(gameId, hostToken);
+  if ((game.status !== "LOBBY" && game.status !== "TEAMS_SET") || game.lineup !== null) {
+    throw new ConflictError("The lineup is locked once the first round starts");
+  }
+  const pins: LineupPins = {
+    surveys: parsePins(
+      args,
+      "surveys",
+      game.surveys.filter((survey) => !survey.used).map((survey) => survey.number),
+    ),
+    fastMoney: parsePins(
+      args,
+      "fastMoney",
+      game.fastMoneyQuestions.map((question) => question.number),
+    ),
+  };
+  await updateItem(keys.game(gameId), {
+    updateExpression: "SET lineupPins = :pins",
+    values: { ":pins": pins },
+    conditionExpression: "attribute_exists(pk)",
+  });
+  return toHostGame({ ...game, lineupPins: pins }).lineup;
 }

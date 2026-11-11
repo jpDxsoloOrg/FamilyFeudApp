@@ -86,6 +86,7 @@ export default $config({
       "deleteSurvey",
       "upsertFastMoneyQuestion",
       "deleteFastMoneyQuestion",
+      "setLineupPins",
       "startRound",
       "skipContestant",
       "armBuzzers",

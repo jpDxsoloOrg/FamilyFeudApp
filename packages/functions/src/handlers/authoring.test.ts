@@ -3,7 +3,7 @@ import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from ".
 import { keys } from "../lib/keys.js";
 import { installFakeDynamo, type FakeTable } from "../testSupport/fakeDynamo.js";
 import { GAME_ID, HOST_TOKEN, seedGame } from "../testSupport/fixtures.js";
-import { deleteFastMoneyQuestion, deleteSurvey, parseAnswers, upsertFastMoneyQuestion, upsertSurvey } from "./authoring.js";
+import { deleteFastMoneyQuestion, deleteSurvey, parseAnswers, setLineupPins, upsertFastMoneyQuestion, upsertSurvey } from "./authoring.js";
 import { hostGame } from "./queries.js";
 
 let table: FakeTable;
@@ -113,5 +113,38 @@ describe("deleteFastMoneyQuestion", () => {
     await upsertFastMoneyQuestion({ ...host, number: 1, text: "Q", answers });
     seedGame(table, { meta: { status: "FAST_MONEY" } });
     await expect(deleteFastMoneyQuestion({ ...host, number: 1 })).rejects.toThrow(ConflictError);
+  });
+});
+
+describe("setLineupPins", () => {
+  beforeEach(async () => {
+    for (const number of [1, 2, 3]) await upsertSurvey({ ...host, number, text: `S${number}`, answers });
+    for (const number of [1, 2]) await upsertFastMoneyQuestion({ ...host, number, text: `F${number}`, answers });
+  });
+
+  it("stores pins (null = random) and returns them in the host lineup", async () => {
+    const lineup = await setLineupPins({ ...host, surveys: [null, 3], fastMoney: [2] });
+    expect(lineup).toEqual({ surveyPins: [null, 3], fastMoneyPins: [2], surveys: null, fastMoney: null });
+    expect(table.get(`GAME#${GAME_ID}`, "META")?.lineupPins).toEqual({ surveys: [null, 3], fastMoney: [2] });
+    expect((await hostGame(host)).lineup.surveyPins).toEqual([null, 3]);
+  });
+
+  it("rejects unknown, duplicate and malformed pins", async () => {
+    await expect(setLineupPins({ ...host, surveys: [9], fastMoney: [] })).rejects.toThrow(NotFoundError);
+    await expect(setLineupPins({ ...host, surveys: [1, 1], fastMoney: [] })).rejects.toThrow(/more than one slot/);
+    await expect(setLineupPins({ ...host, surveys: ["1"], fastMoney: [] })).rejects.toThrow(ValidationError);
+    await expect(setLineupPins({ ...host, surveys: Array.from({ length: 11 }, () => null), fastMoney: [] })).rejects.toThrow(ValidationError);
+  });
+
+  it("is locked once the lineup has been drawn", async () => {
+    seedGame(table, { meta: { status: "ROUND_ACTIVE", lineup: { surveys: [1], fastMoney: [1] } } });
+    await expect(setLineupPins({ ...host, surveys: [], fastMoney: [] })).rejects.toThrow(ConflictError);
+  });
+
+  it("refuses to delete a question that is in the drawn lineup", async () => {
+    seedGame(table, { meta: { status: "ROUND_ACTIVE", lineup: { surveys: [2], fastMoney: [1] } } });
+    await expect(deleteSurvey({ ...host, number: 2 })).rejects.toThrow(/lineup/);
+    await expect(deleteFastMoneyQuestion({ ...host, number: 1 })).rejects.toThrow(/lineup/);
+    await expect(deleteSurvey({ ...host, number: 3 })).resolves.toBe(true);
   });
 });

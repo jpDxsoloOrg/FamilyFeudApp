@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { ConflictError, ForbiddenError } from "../lib/errors.js";
 import { keys } from "../lib/keys.js";
 import { installFakeDynamo, type FakeTable } from "../testSupport/fakeDynamo.js";
-import { GAME_ID, HOST_TOKEN, player, seedGame, team } from "../testSupport/fixtures.js";
+import { GAME_ID, HOST_TOKEN, player, seedFastMoneyQuestions, seedGame, smallConfig, team } from "../testSupport/fixtures.js";
 import { buzz, buzzWithOutcome } from "./buzz.js";
 import { armBuzzers, startRound } from "./round.js";
 
@@ -12,12 +12,13 @@ const host = { gameId: GAME_ID, hostToken: HOST_TOKEN };
 beforeEach(async () => {
   table = installFakeDynamo();
   seedGame(table, {
-    meta: { status: "TEAMS_SET" },
+    meta: { status: "TEAMS_SET", config: smallConfig() },
     players: [player("a1", { teamId: "t1" }), player("a2", { teamId: "t1", order: 1 }), player("b1", { teamId: "t2" })],
     teams: [team("t1", "Team 1"), team("t2", "Team 2")],
   });
   table.seed({ ...keys.survey(GAME_ID, 1), text: "Q", answers: [{ text: "A", points: 50 }], used: false });
-  await startRound({ ...host, surveyNumber: 1 });
+  seedFastMoneyQuestions(table, 1);
+  await startRound(host);
 });
 
 describe("buzz", () => {

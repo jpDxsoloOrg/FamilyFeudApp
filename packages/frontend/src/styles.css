@@ -278,3 +278,18 @@ select.input { appearance: auto; }
 .host-chats__team { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .host-chats__team h3 { margin: 0; }
 .host-chats .chat__list { flex: none; height: 16rem; }
+
+/* ---------- Game lineup (Setup) ---------- */
+.lineup__grid { display: flex; flex-direction: column; gap: 12px; }
+.lineup__grid > .card { margin: 0; }
+.lineup__group { display: flex; flex-direction: column; gap: 8px; }
+.lineup__group h3 { margin: 0 0 4px; }
+.lineup__slot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.lineup__label { min-width: 88px; font-weight: 700; }
+.lineup__select { flex: 1; min-width: 0; max-width: 100%; }
+.lineup__status { margin: 4px 0; }
+.lineup__status--short { color: var(--red-2); }
+.lineup__drawn { margin: 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.lineup__drawn li { display: flex; gap: 10px; }
+.lineup__drawn .lineup__label { flex-shrink: 0; }
+.lineup__text { flex: 1; min-width: 0; }

@@ -11,6 +11,8 @@ import type {
   FastMoneyStage,
   GameConfig,
   GameStatus,
+  Lineup,
+  LineupPins,
   Player,
   RoundData,
   RoundState,
@@ -34,6 +36,10 @@ export interface GameMetaItem extends Item {
   fastMoneyPlayerIds: string[];
   timerEndsAt: number | null;
   createdAt: string;
+  /** Host-pinned questions per slot (null = random). Absent on older games. */
+  lineupPins?: LineupPins;
+  /** Drawn when round 1 starts; absent/null until then. */
+  lineup?: Lineup | null;
 }
 
 export interface JoinCodeItem extends Item {
@@ -230,6 +236,28 @@ export interface GameMeta {
   timerEndsAt: number | null;
   createdAt: string;
   hostTokenHash: string;
+  lineupPins: LineupPins;
+  lineup: Lineup | null;
+}
+
+function intList(value: unknown): number[] {
+  return Array.isArray(value) ? value.filter((n): n is number => typeof n === "number" && Number.isInteger(n)) : [];
+}
+
+function pinList(value: unknown): (number | null)[] {
+  return Array.isArray(value) ? value.map((n) => (typeof n === "number" && Number.isInteger(n) ? n : null)) : [];
+}
+
+/** Lenient: older games have no pins and no lineup. */
+export function toLineupPins(value: unknown): LineupPins {
+  const raw = typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+  return { surveys: pinList(raw.surveys), fastMoney: pinList(raw.fastMoney) };
+}
+
+export function toLineup(value: unknown): Lineup | null {
+  if (typeof value !== "object" || value === null) return null;
+  const raw = value as Record<string, unknown>;
+  return { surveys: intList(raw.surveys), fastMoney: intList(raw.fastMoney) };
 }
 
 export function toGameMeta(item: Item): GameMeta {
@@ -245,6 +273,8 @@ export function toGameMeta(item: Item): GameMeta {
     timerEndsAt: nullableNum(item, "timerEndsAt"),
     createdAt: str(item, "createdAt"),
     hostTokenHash: str(item, "hostTokenHash"),
+    lineupPins: toLineupPins(item.lineupPins),
+    lineup: toLineup(item.lineup),
   };
 }
 

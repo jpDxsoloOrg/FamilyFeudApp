@@ -1,5 +1,5 @@
 /** Seed helpers for handler tests. */
-import { DEFAULT_CONFIG, type Player, type Team } from "@familyfeud/core";
+import { DEFAULT_CONFIG, type GameConfig, type Player, type Team } from "@familyfeud/core";
 import { hashHostToken } from "../lib/auth.js";
 import { keys } from "../lib/keys.js";
 import { playerItem, teamItem, type GameMetaItem, type JoinCodeItem } from "../lib/mappers.js";
@@ -46,4 +46,16 @@ export function seedGame(
   table.seed(metaItem(options.meta), joinCodeItem());
   for (const p of options.players ?? []) table.seed(playerItem(GAME_ID, p));
   for (const t of options.teams ?? []) table.seed(teamItem(GAME_ID, t));
+}
+
+/** Default config with fewer rounds / Fast Money questions, so tests need only a small bank. */
+export function smallConfig(roundCount = 1, fastMoneyQuestionCount = 1): GameConfig {
+  return { ...DEFAULT_CONFIG, roundCount, roundMultipliers: Array.from({ length: roundCount }, () => 1), fastMoneyQuestionCount };
+}
+
+/** Seed Fast Money questions 1..count ("FM1", "FM2", ...). */
+export function seedFastMoneyQuestions(table: FakeTable, count: number): void {
+  for (let n = 1; n <= count; n++) {
+    table.seed({ ...keys.fastMoneyQuestion(GAME_ID, n), text: `FM${n}`, answers: [{ text: `Top${n}`, points: 60 }] });
+  }
 }

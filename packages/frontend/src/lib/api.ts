@@ -5,6 +5,7 @@ import type {
   ApiGame,
   ApiGameUpdate,
   ApiHostGame,
+  ApiLineup,
   ApiPlayerMessage,
   ApiTeamMessage,
   FastMoneyQuestion,
@@ -117,6 +118,7 @@ export const TEAM_MESSAGE_FIELDS = "gameId teamId id senderId senderName text se
 
 const SURVEY_FIELDS = "number text used answers { text points }";
 const FM_QUESTION_FIELDS = "number text answers { text points }";
+const LINEUP_FIELDS = "surveyPins fastMoneyPins surveys fastMoney";
 
 export const ON_GAME_UPDATED = `subscription OnGameUpdated($gameId: ID!) {
   onGameUpdated(gameId: $gameId) { ${GAME_UPDATE_FIELDS} }
@@ -147,6 +149,8 @@ export async function fetchHostGame(gameId: string, hostToken: string): Promise<
         game { ${GAME_FIELDS} }
         surveys { ${SURVEY_FIELDS} }
         fastMoneyQuestions { ${FM_QUESTION_FIELDS} }
+        fastMoneyInPlay { ${FM_QUESTION_FIELDS} }
+        lineup { ${LINEUP_FIELDS} }
         currentBoard { index text points revealed }
         currentQuestion
         fastMoneyAnswers { slot questionIndex answer skipped likelyDuplicate matchedIndex points revealed }
@@ -240,8 +244,25 @@ export function restorePlayer(gameId: string, hostToken: string, playerId: strin
 
 /* ---------- round ---------- */
 
-export function startRound(gameId: string, hostToken: string, surveyNumber: number): Promise<ApiGameUpdate> {
-  return hostMutation("startRound", ", $surveyNumber: Int!", ", surveyNumber: $surveyNumber", { gameId, hostToken, surveyNumber });
+/** Start the next round; the server picks the survey from the lineup (drawn when round 1 starts). */
+export function startRound(gameId: string, hostToken: string): Promise<ApiGameUpdate> {
+  return hostMutation("startRound", "", "", { gameId, hostToken });
+}
+
+/** Pin questions to round / Fast Money slots; null leaves a slot random. */
+export async function setLineupPins(
+  gameId: string,
+  hostToken: string,
+  surveys: (number | null)[],
+  fastMoney: (number | null)[],
+): Promise<ApiLineup> {
+  const data = await gql<{ setLineupPins: ApiLineup }>(
+    `mutation SetLineupPins($gameId: ID!, $hostToken: String!, $surveys: [Int]!, $fastMoney: [Int]!) {
+      setLineupPins(gameId: $gameId, hostToken: $hostToken, surveys: $surveys, fastMoney: $fastMoney) { ${LINEUP_FIELDS} }
+    }`,
+    { gameId, hostToken, surveys, fastMoney },
+  );
+  return data.setLineupPins;
 }
 
 export function skipContestant(gameId: string, hostToken: string, teamId: string): Promise<ApiGameUpdate> {

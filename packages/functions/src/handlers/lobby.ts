@@ -82,6 +82,8 @@ export async function createGame(args: Args): Promise<CreateGamePayload> {
       rounds: [],
       fastMoneyQuestions: [],
       fastMoney: { stage: "SETUP", teamId: null, playerIds: [], timerEndsAt: null, responses: [] },
+      lineupPins: { surveys: [], fastMoney: [] },
+      lineup: null,
     };
     return { game: toPublicGame(game), hostToken };
   }

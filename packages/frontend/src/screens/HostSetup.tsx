@@ -2,6 +2,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { CopyButton } from "../components/CopyButton";
+import { GameLineup } from "../components/GameLineup";
 import { HostTokenGate } from "../components/HostTokenGate";
 import { QuestionEditor, type QuestionDraft } from "../components/QuestionEditor";
 import { QuestionBankTools } from "../components/QuestionBankTools";
@@ -10,6 +11,7 @@ import { useHostGame } from "../hooks/useHostGame";
 import {
   deleteFastMoneyQuestion,
   deleteSurvey,
+  setLineupPins,
   toApiError,
   updateConfig,
   upsertFastMoneyQuestion,
@@ -377,6 +379,8 @@ export function HostSetup() {
   const fastMoneyQuestions = host?.fastMoneyQuestions ?? [];
   const surveysNeeded = game.config.roundCount;
   const fmNeeded = game.config.fastMoneyQuestionCount;
+  const lineup = host?.lineup;
+  const inLineup = (numbers: number[] | null | undefined, number: number): boolean => numbers?.includes(number) ?? false;
 
   return (
     <main className="hx hx-page">
@@ -399,6 +403,7 @@ export function HostSetup() {
       <nav className="hx-jumps" aria-label="Jump to">
         <a href="#settings">Settings</a>
         <a href="#bank">Bank</a>
+        <a href="#lineup">Lineup</a>
         <a href="#surveys">
           Surveys {surveys.length}/{surveysNeeded}
         </a>
@@ -441,15 +446,30 @@ export function HostSetup() {
         </div>
 
         <div className="hx-setup__right">
+          {lineup && (
+            <div id="lineup">
+              <GameLineup
+                config={game.config}
+                surveys={surveys}
+                fastMoneyQuestions={fastMoneyQuestions}
+                lineup={lineup}
+                onSave={async (surveyPins, fastMoneyPins) => {
+                  const saved = await setLineupPins(gameId, hostToken, surveyPins, fastMoneyPins);
+                  patchHost({ lineup: saved });
+                }}
+              />
+            </div>
+          )}
+
           <div id="surveys">
             <QuestionList<Survey>
-              heading={`Survey questions (${surveys.length}/${surveysNeeded} needed)`}
-              intro="One per round. Up to 8 answers each; the board sorts them by points. A survey that has been played is locked."
+              heading={`Survey bank (${surveys.length} · ${surveysNeeded} needed)`}
+              intro="Round questions. Each round draws a different one at random unless you pin it in the lineup. Up to 8 answers each; the board sorts them by points. A survey that has been played is locked."
               items={surveys}
               editorTitle="Survey"
               canEdit={(survey) => !survey.used}
-              canDelete={(survey) => !survey.used}
-              lockedTag={(survey) => (survey.used ? "played" : undefined)}
+              canDelete={(survey) => !survey.used && !inLineup(lineup?.surveys, survey.number)}
+              lockedTag={(survey) => (survey.used ? "played" : inLineup(lineup?.surveys, survey.number) ? "in lineup" : undefined)}
               onSave={async (draft) => {
                 const saved = await upsertSurvey(gameId, hostToken, draft.number, draft.text, draft.answers);
                 patchHost((current) => ({
@@ -468,13 +488,21 @@ export function HostSetup() {
 
           <div id="fast-money">
             <QuestionList<FastMoneyQuestion>
-              heading={`Fast Money questions (${fastMoneyQuestions.length}/${fmNeeded} needed)`}
-              intro="Quick-fire questions for the finale. Locked once Fast Money starts."
+              heading={`Fast Money bank (${fastMoneyQuestions.length} · ${fmNeeded} needed)`}
+              intro="Quick-fire questions for the finale, drawn at random from this bank unless pinned in the lineup. Locked once Fast Money starts."
               items={fastMoneyQuestions}
               editorTitle="Fast Money question"
               canEdit={() => game.status !== "FAST_MONEY" && game.status !== "FINISHED"}
-              canDelete={() => game.status !== "FAST_MONEY" && game.status !== "FINISHED"}
-              lockedTag={() => (game.status === "FAST_MONEY" || game.status === "FINISHED" ? "locked" : undefined)}
+              canDelete={(question) =>
+                game.status !== "FAST_MONEY" && game.status !== "FINISHED" && !inLineup(lineup?.fastMoney, question.number)
+              }
+              lockedTag={(question) =>
+                game.status === "FAST_MONEY" || game.status === "FINISHED"
+                  ? "locked"
+                  : inLineup(lineup?.fastMoney, question.number)
+                    ? "in lineup"
+                    : undefined
+              }
               onSave={async (draft) => {
                 const saved = await upsertFastMoneyQuestion(gameId, hostToken, draft.number, draft.text, draft.answers);
                 patchHost((current) => ({

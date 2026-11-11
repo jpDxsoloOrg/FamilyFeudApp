@@ -145,6 +145,14 @@ describe("fastMoneyView / submit / skip", () => {
     await expect(fastMoneyView({ gameId: "nope", playerId: "a1" })).resolves.toBeNull();
   });
 
+  it("asks the drawn lineup's questions in lineup order", async () => {
+    table.seed({ ...meta()!, lineup: { surveys: [1], fastMoney: [3, 1, 2] } });
+    await startFastMoneyTurn({ ...host, slot: 1 });
+    const view = await fastMoneyView({ gameId: GAME_ID, playerId: "a1" });
+    expect(view?.queue.map((q) => q.text)).toEqual(["FM3", "FM1", "FM2"]);
+    expect((await hostGame(host)).fastMoneyInPlay.map((q) => q.number)).toEqual([3, 1, 2]);
+  });
+
   it("submit and skip update the sheet and the queue", async () => {
     await startFastMoneyTurn({ ...host, slot: 1 });
     let view = await skipFastMoneyQuestion({ gameId: GAME_ID, playerId: "a1", questionIndex: 0 });
