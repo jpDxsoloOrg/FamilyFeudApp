@@ -6,3 +6,4 @@ export * from "./fastMoney.js";
 export * from "./publicView.js";
 export * from "./questionBank.js";
 export * from "./chat.js";
+export * from "./lineup.js";

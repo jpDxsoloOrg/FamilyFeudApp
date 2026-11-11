@@ -2,19 +2,22 @@
 import {
   createRound,
   IllegalTransitionError,
+  LineupError,
   nextContestant,
+  resolveSlots,
   roundReducer,
   teamRoster,
   type RoundAction,
   type RoundContext,
   type RoundData,
+  type Lineup,
   type RoundEvent,
   type Team,
 } from "@familyfeud/core";
 import { requiredInt, requiredString, type Args } from "../lib/args.js";
 import { requireHost } from "../lib/auth.js";
 import { getItem, putItem, tableName, transactWrite, type TransactItems } from "../lib/db.js";
-import { ConflictError, NotFoundError, ValidationError } from "../lib/errors.js";
+import { ConflictError, NotFoundError } from "../lib/errors.js";
 import { currentRoundOf, type FullGame } from "../lib/gameState.js";
 import { keys } from "../lib/keys.js";
 import { roundHistory, roundItem, teamItem } from "../lib/mappers.js";
@@ -106,11 +109,45 @@ async function applyAction(args: Args, action: RoundAction, fallback: GameEvent)
   return gameUpdate(withRound(game, next), primaryEvent(events, fallback));
 }
 
-/** Begin round N with survey S; auto-picks the next contestant from each team. */
+/**
+ * Draw the game's lineup: one survey per round and the Fast Money set. Host
+ * pins are kept; every other slot gets a distinct random question. Rounds that
+ * were already played (games that predate lineups) keep their surveys.
+ */
+export function drawLineup(game: FullGame, rng?: () => number): Lineup {
+  const { roundCount, fastMoneyQuestionCount } = game.config;
+  const played = game.rounds.map((round) => round.surveyNumber);
+  const unused = game.surveys.filter((survey) => !survey.used).map((survey) => survey.number);
+  const fmPool = game.fastMoneyQuestions.map((question) => question.number);
+  const remaining = roundCount - played.length;
+  if (unused.length < remaining) {
+    throw new ConflictError(
+      `${remaining} rounds need ${remaining} survey questions but the bank has ${unused.length}. Add more in Setup.`,
+    );
+  }
+  if (fmPool.length < fastMoneyQuestionCount) {
+    throw new ConflictError(
+      `Fast Money needs ${fastMoneyQuestionCount} questions but the bank has ${fmPool.length}. Add more in Setup.`,
+    );
+  }
+  try {
+    return {
+      surveys: [...played, ...resolveSlots(unused, game.lineupPins.surveys.slice(played.length), remaining, rng)],
+      fastMoney: resolveSlots(fmPool, game.lineupPins.fastMoney, fastMoneyQuestionCount, rng),
+    };
+  } catch (error) {
+    if (error instanceof LineupError) throw new ConflictError(error.message);
+    throw error;
+  }
+}
+
+/**
+ * Begin the next round with the next survey in the lineup; auto-picks the next
+ * contestant from each team. The lineup is drawn when the first round starts.
+ */
 export async function startRound(args: Args): Promise<GameUpdate> {
   const gameId = requiredString(args, "gameId");
   const hostToken = requiredString(args, "hostToken");
-  const surveyNumber = requiredInt(args, "surveyNumber", { min: 1 });
 
   const game = await requireHost(gameId, hostToken);
   if (game.status !== "TEAMS_SET" && game.status !== "ROUND_ACTIVE") {
@@ -121,9 +158,12 @@ export async function startRound(args: Args): Promise<GameUpdate> {
   const number = (game.currentRound ?? 0) + 1;
   if (number > game.config.roundCount) throw new ConflictError("All rounds have been played; move on to Fast Money");
 
+  const freshLineup = game.lineup === null;
+  const lineup = game.lineup ?? drawLineup(game);
+  const surveyNumber = lineup.surveys[number - 1];
   const survey = game.surveys.find((s) => s.number === surveyNumber);
-  if (!survey) throw new NotFoundError(`No survey ${surveyNumber} in this game`);
-  if (survey.used) throw new ValidationError(`Survey ${surveyNumber} has already been played`);
+  if (surveyNumber === undefined || !survey) throw new NotFoundError(`Survey for round ${number} is missing from the bank`);
+  if (survey.used) throw new ConflictError(`Survey ${surveyNumber} has already been played`);
 
   const teams: Team[] = [];
   const contestants: Record<string, string> = {};
@@ -150,9 +190,13 @@ export async function startRound(args: Args): Promise<GameUpdate> {
       Update: {
         TableName: table,
         Key: keys.game(gameId),
-        UpdateExpression: "SET #status = :active, currentRound = :number",
+        UpdateExpression: freshLineup
+          ? "SET #status = :active, currentRound = :number, lineup = :lineup"
+          : "SET #status = :active, currentRound = :number",
         ExpressionAttributeNames: { "#status": "status" },
-        ExpressionAttributeValues: { ":active": "ROUND_ACTIVE", ":number": number },
+        ExpressionAttributeValues: freshLineup
+          ? { ":active": "ROUND_ACTIVE", ":number": number, ":lineup": lineup }
+          : { ":active": "ROUND_ACTIVE", ":number": number },
       },
     },
   ];
@@ -162,6 +206,7 @@ export async function startRound(args: Args): Promise<GameUpdate> {
     ...game,
     status: "ROUND_ACTIVE",
     currentRound: number,
+    lineup,
     teams,
     rounds: [...game.rounds, round],
     surveys: game.surveys.map((s) => (s.number === surveyNumber ? { ...s, used: true } : s)),

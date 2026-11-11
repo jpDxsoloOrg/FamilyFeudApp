@@ -64,11 +64,22 @@ export interface ApiHostFastMoneyRow extends ApiFastMoneyRow {
   matchedIndex: number | null;
 }
 
+/** The schema's `Lineup`: host pins per slot (null = random) and the drawn order once round 1 starts. */
+export interface ApiLineup {
+  surveyPins: (number | null)[];
+  fastMoneyPins: (number | null)[];
+  surveys: number[] | null;
+  fastMoney: number[] | null;
+}
+
 /** The schema's `HostGame`. */
 export interface ApiHostGame {
   game: ApiGame;
   surveys: Survey[];
   fastMoneyQuestions: FastMoneyQuestion[];
+  /** Fast Money questions in play order; `questionIndex` indexes into this. */
+  fastMoneyInPlay: FastMoneyQuestion[];
+  lineup: ApiLineup;
   currentBoard: BoardAnswer[];
   currentQuestion: string | null;
   fastMoneyAnswers: ApiHostFastMoneyRow[];

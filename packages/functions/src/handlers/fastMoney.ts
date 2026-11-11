@@ -14,7 +14,7 @@ import { optionalInt, requiredArray, requiredInt, requiredString, type Args } fr
 import { requireHost } from "../lib/auth.js";
 import { batchWrite, putItem, updateItem } from "../lib/db.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../lib/errors.js";
-import { loadGame, type FullGame } from "../lib/gameState.js";
+import { fastMoneySet, loadGame, type FullGame } from "../lib/gameState.js";
 import { keys } from "../lib/keys.js";
 import { fastMoneyResponseItem } from "../lib/mappers.js";
 import { playerMessage, type PlayerMessage } from "../lib/messages.js";
@@ -82,8 +82,9 @@ export async function selectFastMoneyPlayers(args: Args): Promise<GameUpdate> {
     }
   }
   const questionCount = game.config.fastMoneyQuestionCount;
-  if (game.fastMoneyQuestions.length < questionCount) {
-    throw new ConflictError(`Fast Money needs ${questionCount} questions; ${game.fastMoneyQuestions.length} written`);
+  const available = fastMoneySet(game).length;
+  if (available < questionCount) {
+    throw new ConflictError(`Fast Money needs ${questionCount} questions; ${available} available`);
   }
 
   const responses = emptyResponses(questionCount);
@@ -172,7 +173,7 @@ export function toFastMoneyView(game: FullGame, playerId: string): FastMoneyView
   const mine = slot === 0 ? [] : game.fastMoney.responses.filter((r) => r.slot === slot);
   const answered = mine.filter((r) => r.answer !== null).length;
   const isActive = slot !== 0 && slot === active;
-  const questions = game.fastMoneyQuestions;
+  const questions = fastMoneySet(game);
   const queue = isActive
     ? buildQueue(game.fastMoney.responses, slot).flatMap((questionIndex) => {
         const question = questions[questionIndex];
@@ -290,7 +291,7 @@ export async function revealFastMoneyAnswer(args: Args): Promise<GameUpdate> {
 
   let points = 0;
   if (matchedIndex !== null) {
-    const question = game.fastMoneyQuestions[questionIndex];
+    const question = fastMoneySet(game)[questionIndex];
     const match = question?.answers[matchedIndex];
     if (!match) throw new ValidationError(`Question ${questionIndex + 1} has no board answer ${matchedIndex + 1}`);
     points = match.points;

@@ -117,6 +117,7 @@ export interface FakeTable {
   get(pk: string, sk: string): Item | undefined;
   all(): Item[];
   seed(...items: Item[]): void;
+  delete(pk: string, sk: string): void;
   reset(): void;
 }
 
@@ -136,6 +137,9 @@ export function installFakeDynamo(): FakeTable {
   const table: FakeTable = {
     get: (pk, sk) => items.get(itemKey(pk, sk)),
     all: () => [...items.values()],
+    delete: (pk, sk) => {
+      items.delete(itemKey(pk, sk));
+    },
     seed: (...seeded) => {
       for (const item of seeded) items.set(itemKey(item.pk, item.sk), { ...item });
     },

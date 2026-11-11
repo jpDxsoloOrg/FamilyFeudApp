@@ -143,7 +143,7 @@ function HostConsole({ gameId: id, token, game, live, muted, toggleMuted, justRe
   const [unread, setUnread] = useState(0);
   const chatsDocked = useMediaQuery(CHATS_DOCKED);
   const display = useDisplayWindow(id);
-  const surveys = useSurveyChoice(host?.surveys ?? EMPTY_SURVEYS);
+  const surveys = useSurveyChoice(host?.surveys ?? EMPTY_SURVEYS, host?.lineup, game);
   const picks = useFastMoneyPicks(game, (name) => setNote(`Swapped out ${name}`));
   const fm = game.fastMoney;
   const seconds = useCountdown(fm?.timerEndsAt, clockOffset);
@@ -151,7 +151,7 @@ function HostConsole({ gameId: id, token, game, live, muted, toggleMuted, justRe
   const [fmSlot, setFmSlot] = useState<FmSlot>(1);
   const [fmPick, setFmPick] = useState<FmPick | null>(null);
   const reveal = useMemo(
-    () => (fm?.stage === "REVEAL" ? fmRevealView(game, host?.fastMoneyAnswers ?? [], host?.fastMoneyQuestions ?? [], fmSlot, fmPick) : undefined),
+    () => (fm?.stage === "REVEAL" ? fmRevealView(game, host?.fastMoneyAnswers ?? [], host?.fastMoneyInPlay ?? [], fmSlot, fmPick) : undefined),
     [fm?.stage, game, host, fmSlot, fmPick],
   );
 
@@ -190,7 +190,7 @@ function HostConsole({ gameId: id, token, game, live, muted, toggleMuted, justRe
   }
 
   const actions: CueActions = {
-    start: (surveyNumber) => refreshed(run(() => startRound(id, token, surveyNumber))),
+    start: () => refreshed(run(() => startRound(id, token))),
     arm: () => void run(() => armBuzzers(id, token)),
     reset: () => void run(() => resetBuzzers(id, token)),
     faceOff: (teamId) => void run(() => setFaceOffWinner(id, token, teamId)),
@@ -222,7 +222,7 @@ function HostConsole({ gameId: id, token, game, live, muted, toggleMuted, justRe
     onRestore: (playerId) => void run(() => restorePlayer(id, token, playerId)),
   };
 
-  const cue = cueFor({ game, host, gameId: id, unused: surveys.unused, survey: surveys.selected, picks, reveal, seconds, actions });
+  const cue = cueFor({ game, host, gameId: id, unused: surveys.unused, survey: surveys.selected, short: surveys.short, picks, reveal, seconds, actions });
 
   const hasTeams = game.teams.length > 0;
   const toggleChats = useCallback(() => setChatOpen((open) => !open), []);
@@ -326,7 +326,7 @@ function HostConsole({ gameId: id, token, game, live, muted, toggleMuted, justRe
         <HostFastMoney
           gameId={id}
           game={game}
-          questions={host?.fastMoneyQuestions ?? []}
+          questions={host?.fastMoneyInPlay ?? []}
           answers={host?.fastMoneyAnswers ?? []}
           picks={picks}
           reveal={reveal}

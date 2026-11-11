@@ -12,12 +12,14 @@ import {
   type FastMoneyStage,
   type GameConfig,
   type GameStatus,
+  type Lineup,
+  type LineupPins,
   type Player,
   type PublicRound,
   type Survey,
   type Team,
 } from "@familyfeud/core";
-import { currentRoundOf, type FullGame } from "./gameState.js";
+import { currentRoundOf, fastMoneySet, type FullGame } from "./gameState.js";
 import { serverTime } from "./time.js";
 
 export interface TeamView extends Team {
@@ -86,11 +88,22 @@ export interface HostFastMoneyRow {
   revealed: boolean;
 }
 
+/** The schema's `Lineup`: host pins plus the drawn order once round 1 starts. */
+export interface LineupView {
+  surveyPins: LineupPins["surveys"];
+  fastMoneyPins: LineupPins["fastMoney"];
+  surveys: Lineup["surveys"] | null;
+  fastMoney: Lineup["fastMoney"] | null;
+}
+
 /** The schema's `HostGame`: public view plus everything hidden from players. */
 export interface HostGameView {
   game: GameView;
   surveys: Survey[];
   fastMoneyQuestions: FastMoneyQuestion[];
+  /** The Fast Money questions in play order; `questionIndex` indexes into this. */
+  fastMoneyInPlay: FastMoneyQuestion[];
+  lineup: LineupView;
   currentBoard: BoardAnswer[];
   currentQuestion: string | null;
   fastMoneyAnswers: HostFastMoneyRow[];
@@ -109,6 +122,13 @@ export function toHostGame(game: FullGame): HostGameView {
     game: toPublicGame(game),
     surveys: game.surveys,
     fastMoneyQuestions: game.fastMoneyQuestions,
+    fastMoneyInPlay: fastMoneySet(game),
+    lineup: {
+      surveyPins: game.lineupPins.surveys,
+      fastMoneyPins: game.lineupPins.fastMoney,
+      surveys: game.lineup?.surveys ?? null,
+      fastMoney: game.lineup?.fastMoney ?? null,
+    },
     currentBoard: round ? round.board : [],
     currentQuestion: round ? round.questionText : null,
     fastMoneyAnswers: game.fastMoney.responses.map((response) => ({

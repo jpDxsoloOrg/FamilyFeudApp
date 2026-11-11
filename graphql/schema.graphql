@@ -156,11 +156,22 @@ type FastMoneyQuestion {
   answers: [SurveyAnswer!]!
 }
 
+"Which questions play when. Pins are the host's choices per slot (null = random); surveys/fastMoney are the drawn order, null until round 1 starts."
+type Lineup {
+  surveyPins: [Int]!
+  fastMoneyPins: [Int]!
+  surveys: [Int!]
+  fastMoney: [Int!]
+}
+
 "Host view: public game plus everything hidden from players."
 type HostGame {
   game: Game!
   surveys: [Survey!]!
   fastMoneyQuestions: [FastMoneyQuestion!]!
+  "The Fast Money questions in play order; Fast Money questionIndex indexes into this."
+  fastMoneyInPlay: [FastMoneyQuestion!]!
+  lineup: Lineup!
   "Full board for the current round, all answers visible."
   currentBoard: [BoardAnswer!]!
   "The current round's question, visible to the host from the moment the round starts (players see it once buzzers are armed)."
@@ -263,10 +274,12 @@ type Mutation {
   deleteSurvey(gameId: ID!, hostToken: String!, number: Int!): Boolean!
   upsertFastMoneyQuestion(gameId: ID!, hostToken: String!, number: Int!, text: String!, answers: [SurveyAnswerInput!]!): FastMoneyQuestion!
   deleteFastMoneyQuestion(gameId: ID!, hostToken: String!, number: Int!): Boolean!
+  "Pin questions to round / Fast Money slots (null = random). Locked once round 1 starts."
+  setLineupPins(gameId: ID!, hostToken: String!, surveys: [Int]!, fastMoney: [Int]!): Lineup!
 
   # ---- Round (host) ----
-  "Begin round N with survey S. Auto-picks the next contestant from each team."
-  startRound(gameId: ID!, hostToken: String!, surveyNumber: Int!): GameUpdate!
+  "Begin the next round with the next survey in the lineup (drawn when round 1 starts). Auto-picks the next contestant from each team."
+  startRound(gameId: ID!, hostToken: String!): GameUpdate!
   "Advance a team's contestant slot past the currently picked player (they left / not ready)."
   skipContestant(gameId: ID!, hostToken: String!, teamId: ID!): GameUpdate!
   "Show the question and enable the two contestants' buzzers."
